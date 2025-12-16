@@ -8,15 +8,20 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #1a1a2e;
-            --bg-secondary: #16213e;
-            --bg-card: #0f3460;
-            --text-primary: #eee;
-            --text-secondary: #aaa;
-            --accent-green: #00d26a;
-            --accent-red: #ff6b6b;
-            --accent-yellow: #ffc107;
-            --accent-blue: #4dabf7;
+            /* T-Mobile Dark Theme Colors */
+            --tm-magenta: #E20074;
+            --tm-magenta-dark: #B8005D;
+            --tm-magenta-light: #FF3399;
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2D2D2D;
+            --bg-card: #3D3D3D;
+            --bg-card-header: #4A4A4A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --accent-green: #00C853;
+            --accent-red: #FF5252;
+            --accent-yellow: #FFD600;
+            --accent-blue: #E20074;
         }
         
         body {
@@ -27,54 +32,133 @@
         }
         
         .navbar {
-            background-color: var(--bg-secondary) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important;
+            border-bottom: none;
+            box-shadow: 0 2px 10px rgba(226, 0, 116, 0.3);
         }
         
         .navbar-brand {
             color: var(--text-primary) !important;
-            font-weight: 600;
+            font-weight: 700;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
         
         .card {
             background-color: var(--bg-card);
-            border: none;
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
         }
         
         .card-header {
-            background-color: rgba(0,0,0,0.2);
+            background-color: var(--bg-card-header);
             border-bottom: 1px solid rgba(255,255,255,0.1);
             font-weight: 600;
+            color: var(--text-primary);
         }
         
         .form-select, .form-control {
-            background-color: var(--bg-secondary);
-            border-color: rgba(255,255,255,0.2);
-            color: var(--text-primary);
+            background-color: #1A1A1A;
+            border: 2px solid rgba(255,255,255,0.3);
+            color: #FFFFFF;
+        }
+        
+        .form-control::placeholder {
+            color: #FFFFFF;
+            opacity: 0.7;
         }
         
         .form-select:focus, .form-control:focus {
-            background-color: var(--bg-secondary);
-            border-color: var(--accent-blue);
-            color: var(--text-primary);
-            box-shadow: 0 0 0 0.25rem rgba(77, 171, 247, 0.25);
+            background-color: #1A1A1A;
+            border-color: var(--tm-magenta);
+            color: #FFFFFF;
+            box-shadow: 0 0 0 0.25rem rgba(226, 0, 116, 0.25);
         }
         
         .form-select option {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
+            background-color: #1A1A1A;
+            color: #FFFFFF;
+        }
+        
+        /* Site name styling */
+        #siteName {
+            color: #FFFFFF;
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        /* Loading progress indicator */
+        .loading-progress {
+            display: none;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .loading-progress.active {
+            display: block;
+        }
+        
+        .loading-progress .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            color: var(--tm-magenta);
+        }
+        
+        .loading-progress-text {
+            margin-top: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .loading-step {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .loading-step i {
+            margin-right: 0.5rem;
+        }
+        
+        .loading-step.completed {
+            color: var(--accent-green);
+        }
+        
+        .loading-step.in-progress {
+            color: var(--tm-magenta);
+        }
+        
+        .loading-step.pending {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+        
+        /* Section divider */
+        .section-divider {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin: 2rem 0;
         }
         
         .btn-primary {
-            background-color: var(--accent-blue);
-            border-color: var(--accent-blue);
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%);
+            border: none;
+            font-weight: 600;
         }
         
         .btn-primary:hover {
-            background-color: #3a9ae8;
-            border-color: #3a9ae8;
+            background: linear-gradient(135deg, var(--tm-magenta-light) 0%, var(--tm-magenta) 100%);
+            border: none;
+        }
+        
+        .btn-primary:focus {
+            box-shadow: 0 0 0 0.25rem rgba(226, 0, 116, 0.5);
+        }
+        
+        .btn-outline-light:hover {
+            background-color: rgba(255,255,255,0.2);
+            border-color: white;
         }
         
         .health-card {
@@ -124,6 +208,52 @@
         .sle-good { background: linear-gradient(90deg, var(--accent-green), #00b359); }
         .sle-warning { background: linear-gradient(90deg, var(--accent-yellow), #e6ac00); }
         .sle-poor { background: linear-gradient(90deg, var(--accent-red), #e65c5c); }
+        
+        .sle-metric-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+        
+        .sle-metric-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .sle-metric-name {
+            min-width: 140px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: capitalize;
+        }
+        
+        .sle-metric-bar {
+            flex: 1;
+            height: 12px;
+            border-radius: 6px;
+            background-color: rgba(255,255,255,0.1);
+            overflow: hidden;
+            margin: 0 1rem;
+        }
+        
+        .sle-metric-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .sle-metric-value {
+            min-width: 50px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .sle-metric-value.good { color: var(--accent-green); }
+        .sle-metric-value.warning { color: var(--accent-yellow); }
+        .sle-metric-value.poor { color: var(--accent-red); }
         
         .sle-value {
             font-size: 2rem;
@@ -213,10 +343,10 @@
         }
         
         .nav-tabs .nav-link.active {
-            color: var(--accent-blue);
+            color: var(--tm-magenta);
             background-color: transparent;
             border-color: transparent;
-            border-bottom-color: var(--accent-blue);
+            border-bottom-color: var(--tm-magenta);
         }
         
         .empty-state {
@@ -229,6 +359,60 @@
             font-size: 4rem;
             margin-bottom: 1rem;
             opacity: 0.5;
+            color: var(--tm-magenta);
+        }
+        
+        /* T-Mobile accented icons */
+        .health-icon .bi-wifi {
+            color: var(--tm-magenta) !important;
+        }
+        
+        .health-icon .bi-hdd-stack {
+            color: var(--tm-magenta-light) !important;
+        }
+        
+        .health-icon .bi-router {
+            color: var(--tm-magenta) !important;
+        }
+        
+        /* Badge overrides for T-Mobile theme */
+        .badge.bg-success {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #00A846 100%) !important;
+        }
+        
+        .badge.bg-warning {
+            background: linear-gradient(135deg, var(--accent-yellow) 0%, #E6C200 100%) !important;
+            color: #1A1A1A !important;
+        }
+        
+        .badge.bg-danger {
+            background: linear-gradient(135deg, var(--accent-red) 0%, #E64545 100%) !important;
+        }
+        
+        /* Table header styling for better readability */
+        .table-dark {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-border-color: rgba(255,255,255,0.1);
+        }
+        
+        .table-dark thead th {
+            background-color: var(--bg-card-header);
+            color: var(--text-primary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        /* SLE card header icons */
+        .card-header .bi-wifi {
+            color: var(--tm-magenta) !important;
+        }
+        
+        .card-header .bi-ethernet {
+            color: var(--tm-magenta-light) !important;
+        }
+        
+        .card-header .bi-globe {
+            color: var(--tm-magenta) !important;
         }
     </style>
 </head>
@@ -283,6 +467,13 @@
             </div>
         </div>
 
+        <!-- Loading Progress Overlay -->
+        <div id="loadingProgress" class="loading-progress">
+            <div class="spinner-border mb-3" role="status"></div>
+            <h5 id="loadingText" class="text-secondary">Loading site data...</h5>
+            <p id="loadingDetail" class="text-secondary small">Preparing request</p>
+        </div>
+
         <!-- Health Summary -->
         <div id="healthSection" style="display: none;">
             <h5 class="mb-3"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
@@ -293,9 +484,9 @@
                         <div class="health-count" id="apCount">-</div>
                         <div class="health-label">Access Points</div>
                         <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span></span>
-                            <span class="mx-2">|</span>
-                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span></span>
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span> Online</span>
+                            <span id="apDivider" class="mx-2">|</span>
+                            <span id="apOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span> Offline</span>
                         </div>
                     </div>
                 </div>
@@ -305,9 +496,9 @@
                         <div class="health-count" id="switchCount">-</div>
                         <div class="health-label">Switches</div>
                         <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span></span>
-                            <span class="mx-2">|</span>
-                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span></span>
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span> Online</span>
+                            <span id="switchDivider" class="mx-2">|</span>
+                            <span id="switchOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span> Offline</span>
                         </div>
                     </div>
                 </div>
@@ -317,147 +508,142 @@
                         <div class="health-count" id="gatewayCount">-</div>
                         <div class="health-label">Gateways</div>
                         <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span></span>
-                            <span class="mx-2">|</span>
-                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span></span>
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span> Online</span>
+                            <span id="gatewayDivider" class="mx-2">|</span>
+                            <span id="gatewayOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span> Offline</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- SLE Metrics -->
-            <h5 class="mb-3"><i class="bi bi-graph-up me-2"></i>Service Level Experience (SLE)</h5>
-            <div class="row mb-4">
-                <div class="col-md-4 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="sle-label">WiFi SLE</div>
-                                    <div class="sle-value" id="wifiSle">-</div>
-                                </div>
-                                <i class="bi bi-wifi text-info" style="font-size: 2rem; opacity: 0.5;"></i>
-                            </div>
-                            <div class="sle-meter">
-                                <div id="wifiSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Loading Progress -->
+            <div id="loadingProgress" class="loading-progress">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-                <div class="col-md-4 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="sle-label">Wired SLE</div>
-                                    <div class="sle-value" id="wiredSle">-</div>
-                                </div>
-                                <i class="bi bi-ethernet text-warning" style="font-size: 2rem; opacity: 0.5;"></i>
-                            </div>
-                            <div class="sle-meter">
-                                <div id="wiredSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="sle-label">WAN SLE</div>
-                                    <div class="sle-value" id="wanSle">-</div>
-                                </div>
-                                <i class="bi bi-globe text-success" style="font-size: 2rem; opacity: 0.5;"></i>
-                            </div>
-                            <div class="sle-meter">
-                                <div id="wanSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <h5 id="loadingText" class="text-secondary mt-3">Loading site data...</h5>
+                <p id="loadingDetail" class="text-secondary small">Preparing request</p>
             </div>
 
-            <!-- Device Details Tabs -->
-            <div class="card">
-                <div class="card-header">
-                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="aps-tab" data-bs-toggle="tab" data-bs-target="#aps-pane" type="button" role="tab">
-                                <i class="bi bi-wifi me-1"></i>Access Points
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="switches-tab" data-bs-toggle="tab" data-bs-target="#switches-pane" type="button" role="tab">
-                                <i class="bi bi-hdd-stack me-1"></i>Switches
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="gateways-tab" data-bs-toggle="tab" data-bs-target="#gateways-pane" type="button" role="tab">
-                                <i class="bi bi-router me-1"></i>Gateways
-                            </button>
-                        </li>
-                    </ul>
+            <!-- Data Content (hidden during loading) -->
+            <div id="dataContent" style="display: none;">
+                <!-- Access Points Section -->
+                <h5 class="mb-3"><i class="bi bi-wifi me-2" style="color: var(--tm-magenta);"></i>Access Points</h5>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-2"></i>AP Devices
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover device-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Clients</th>
+                                        <th>Port Speed</th>
+                                        <th>Power</th>
+                                        <th>Uptime</th>
+                                        <th>Serial</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="apsTable">
+                                    <tr><td colspan="8" class="text-center text-secondary">No access points found</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="tab-content">
-                        <div class="tab-pane fade show active" id="aps-pane" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-dark table-hover device-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Model</th>
-                                            <th>Status</th>
-                                            <th>IP Address</th>
-                                            <th>Version</th>
-                                            <th>Uptime</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="apsTable">
-                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                
+                <!-- WiFi SLE -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-up me-2"></i>WiFi SLE Metrics</span>
+                        <span class="badge bg-secondary" id="wifiSleAvailable">N/A</span>
+                    </div>
+                    <div class="card-body" id="wifiSleMetrics">
+                        <div class="text-center text-secondary py-3">No WiFi SLE data available</div>
+                    </div>
+                </div>
+                
+                <hr class="section-divider">
+                
+                <!-- Switches Section -->
+                <h5 class="mb-3"><i class="bi bi-hdd-stack me-2" style="color: var(--tm-magenta-light);"></i>Switches</h5>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-2"></i>Switch Devices
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover device-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Wired Clients</th>
+                                        <th>APs</th>
+                                        <th>Uptime</th>
+                                        <th>Serial</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="switchesTable">
+                                    <tr><td colspan="7" class="text-center text-secondary">No switches found</td></tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="tab-pane fade" id="switches-pane" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-dark table-hover device-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Model</th>
-                                            <th>Status</th>
-                                            <th>IP Address</th>
-                                            <th>Version</th>
-                                            <th>Uptime</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="switchesTable">
-                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                    </div>
+                </div>
+                
+                <!-- Wired SLE -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-up me-2"></i>Wired SLE Metrics</span>
+                        <span class="badge bg-secondary" id="wiredSleAvailable">N/A</span>
+                    </div>
+                    <div class="card-body" id="wiredSleMetrics">
+                        <div class="text-center text-secondary py-3">No Wired SLE data available</div>
+                    </div>
+                </div>
+                
+                <hr class="section-divider">
+                
+                <!-- Gateways Section -->
+                <h5 class="mb-3"><i class="bi bi-router me-2" style="color: var(--tm-magenta);"></i>Gateways</h5>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-2"></i>Gateway Devices
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover device-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Status</th>
+                                        <th>Uptime</th>
+                                        <th>Serial</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="gatewaysTable">
+                                    <tr><td colspan="5" class="text-center text-secondary">No gateways found</td></tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="tab-pane fade" id="gateways-pane" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-dark table-hover device-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Model</th>
-                                            <th>Status</th>
-                                            <th>IP Address</th>
-                                            <th>Version</th>
-                                            <th>Uptime</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="gatewaysTable">
-                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                    </div>
+                </div>
+                
+                <!-- WAN SLE -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-up me-2"></i>WAN SLE Metrics</span>
+                        <span class="badge bg-secondary" id="wanSleAvailable">N/A</span>
+                    </div>
+                    <div class="card-body" id="wanSleMetrics">
+                        <div class="text-center text-secondary py-3">No WAN SLE data available</div>
                     </div>
                 </div>
             </div>
@@ -589,28 +775,57 @@
 
         // Load site health data
         async function loadSiteHealth(siteId) {
+            const loadingProgress = document.getElementById('loadingProgress');
+            const loadingText = document.getElementById('loadingText');
+            const loadingDetail = document.getElementById('loadingDetail');
+            
+            // Show loading indicator
+            loadingProgress.classList.add('active');
+            healthSection.style.display = 'none';
+            loadingText.textContent = 'Loading site data...';
+            loadingDetail.textContent = 'Fetching device health and SLE metrics';
+            
             try {
-                const [healthResponse, sleResponse] = await Promise.all([
-                    fetch(`/api/sites/${siteId}/health`),
-                    fetch(`/api/sites/${siteId}/sle`)
-                ]);
+                // Start both requests
+                loadingDetail.textContent = 'Requesting device health data...';
+                const healthPromise = fetch(`/api/sites/${siteId}/health`);
                 
+                loadingDetail.textContent = 'Requesting SLE metrics...';
+                const slePromise = fetch(`/api/sites/${siteId}/sle`);
+                
+                // Wait for both responses
+                loadingDetail.textContent = 'Waiting for API responses...';
+                const [healthResponse, sleResponse] = await Promise.all([healthPromise, slePromise]);
+                
+                // Process health data
+                loadingDetail.textContent = 'Processing device health data...';
                 const healthData = await healthResponse.json();
+                
+                // Process SLE data
+                loadingDetail.textContent = 'Processing SLE metrics...';
                 const sleData = await sleResponse.json();
                 
                 if (healthData.success) {
+                    loadingDetail.textContent = 'Updating device tables...';
                     updateHealthDisplay(healthData.health);
                 }
                 
                 if (sleData.success) {
+                    loadingDetail.textContent = 'Updating SLE displays...';
                     updateSleDisplay(sleData.sle);
                 }
                 
+                loadingDetail.textContent = 'Complete!';
+                
+                // Hide loading, show content
+                loadingProgress.classList.remove('active');
+                document.getElementById('dataContent').style.display = 'block';
                 emptyState.style.display = 'none';
                 healthSection.style.display = 'block';
                 siteInfo.style.display = 'block';
                 
             } catch (error) {
+                loadingProgress.classList.remove('active');
                 alert('Error loading site data: ' + error.message);
             }
         }
@@ -621,79 +836,214 @@
             document.getElementById('apCount').textContent = health.aps.total;
             document.getElementById('apConnected').textContent = health.aps.connected;
             document.getElementById('apDisconnected').textContent = health.aps.disconnected;
+            // Hide offline section if zero
+            document.getElementById('apOfflineSection').style.display = health.aps.disconnected > 0 ? 'inline' : 'none';
+            document.getElementById('apDivider').style.display = health.aps.disconnected > 0 ? 'inline' : 'none';
             
             document.getElementById('switchCount').textContent = health.switches.total;
             document.getElementById('switchConnected').textContent = health.switches.connected;
             document.getElementById('switchDisconnected').textContent = health.switches.disconnected;
+            // Hide offline section if zero
+            document.getElementById('switchOfflineSection').style.display = health.switches.disconnected > 0 ? 'inline' : 'none';
+            document.getElementById('switchDivider').style.display = health.switches.disconnected > 0 ? 'inline' : 'none';
             
             document.getElementById('gatewayCount').textContent = health.gateways.total;
             document.getElementById('gatewayConnected').textContent = health.gateways.connected;
             document.getElementById('gatewayDisconnected').textContent = health.gateways.disconnected;
+            // Hide offline section if zero
+            document.getElementById('gatewayOfflineSection').style.display = health.gateways.disconnected > 0 ? 'inline' : 'none';
+            document.getElementById('gatewayDivider').style.display = health.gateways.disconnected > 0 ? 'inline' : 'none';
             
             // Update device tables
-            updateDeviceTable('apsTable', health.aps.devices);
-            updateDeviceTable('switchesTable', health.switches.devices);
-            updateDeviceTable('gatewaysTable', health.gateways.devices);
+            updateAPsTable(health.aps.devices);
+            updateSwitchesTable(health.switches.devices);
+            updateGatewaysTable(health.gateways.devices);
         }
 
-        // Update device table
-        function updateDeviceTable(tableId, devices) {
-            const tbody = document.getElementById(tableId);
+        // Update APs table
+        function updateAPsTable(devices) {
+            const tbody = document.getElementById('apsTable');
             
             if (!devices || devices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary">No devices found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No access points found</td></tr>';
                 return;
             }
             
             tbody.innerHTML = devices.map(device => `
                 <tr>
                     <td>${device.name || '-'}</td>
-                    <td>${device.model || '-'}</td>
                     <td><span class="status-badge ${device.status}">${device.status}</span></td>
-                    <td>${device.ip || '-'}</td>
-                    <td>${device.version || '-'}</td>
+                    <td>${device.num_clients || 0}</td>
+                    <td>${device.port_speed ? device.port_speed + ' Mbps' : '-'}</td>
+                    <td>${device.power_src || '-'}</td>
                     <td>${formatUptime(device.uptime)}</td>
+                    <td><small>${device.serial || '-'}</small></td>
+                    <td><small class="text-secondary">${device.notes || '-'}</small></td>
+                </tr>
+            `).join('');
+        }
+        
+        // Update Switches table
+        function updateSwitchesTable(devices) {
+            const tbody = document.getElementById('switchesTable');
+            
+            if (!devices || devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No switches found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = devices.map(device => `
+                <tr>
+                    <td>${device.name || '-'}</td>
+                    <td><span class="status-badge ${device.status}">${device.status}</span></td>
+                    <td>${device.num_wired_clients || 0}</td>
+                    <td>${device.num_aps || 0}</td>
+                    <td>${formatUptime(device.uptime)}</td>
+                    <td><small>${device.serial || '-'}</small></td>
+                    <td><small class="text-secondary">${device.notes || '-'}</small></td>
+                </tr>
+            `).join('');
+        }
+        
+        // Update Gateways table
+        function updateGatewaysTable(devices) {
+            const tbody = document.getElementById('gatewaysTable');
+            
+            if (!devices || devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">No gateways found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = devices.map(device => `
+                <tr>
+                    <td>${device.name || '-'}</td>
+                    <td><span class="status-badge ${device.status}">${device.status}</span></td>
+                    <td>${formatUptime(device.uptime)}</td>
+                    <td><small>${device.serial || '-'}</small></td>
+                    <td><small class="text-secondary">${device.notes || '-'}</small></td>
                 </tr>
             `).join('');
         }
 
-        // Update SLE display
+        // Update SLE display with subcategories
         function updateSleDisplay(sle) {
-            // WiFi SLE
-            if (sle.wifi) {
-                const wifiValue = Math.round(sle.wifi.sle * 100);
-                document.getElementById('wifiSle').textContent = wifiValue + '%';
-                const wifiMeter = document.getElementById('wifiSleMeter');
-                wifiMeter.style.width = wifiValue + '%';
-                wifiMeter.className = `sle-fill ${getSleClass(wifiValue)}`;
-            } else {
-                document.getElementById('wifiSle').textContent = 'N/A';
-                document.getElementById('wifiSleMeter').style.width = '0%';
+            // Metric display names
+            const metricNames = {
+                'ap-availability': 'AP Availability',
+                'ap-health': 'AP Health',
+                'capacity': 'Capacity',
+                'coverage': 'Coverage',
+                'roaming': 'Roaming',
+                'successful-connect': 'Successful Connect',
+                'throughput': 'Throughput',
+                'time-to-connect': 'Time to Connect',
+                'switch-health': 'Switch Health',
+                'switch-stc': 'Switch Successful Connect',
+                'switch-throughput': 'Switch Throughput',
+                'gateway-health': 'Gateway Health',
+                'gateway-bandwidth': 'Gateway Bandwidth',
+                'wan-link-health': 'WAN Link Health',
+                'application-health': 'Application Health'
+            };
+            
+            // Metric descriptions from Juniper Mist OpenAPI documentation
+            const metricDescriptions = {
+                // WiFi SLEs
+                'ap-availability': 'Measures the percentage of time that access points are available and connected to the Mist cloud.',
+                'ap-health': 'Tracks incidents when APs rebooted or lost connectivity to the cloud. Classifiers include Low Power, AP Disconnected, Ethernet errors, and Network issues.',
+                'capacity': 'Tracks user minutes when clients experience low capacity due to RF interference, number of attached clients, and usage by attached clients.',
+                'coverage': 'Measures client signal strength (RSSI) as received by the AP. Use this to determine if you have enough APs deployed.',
+                'roaming': 'Tracks the percentage of successful roams between access points. Classifiers include slow 11r, slow OKC, slow standard roams, and failed fast roams.',
+                'successful-connect': 'Measures clients\' ability to successfully connect to the wireless network.',
+                'throughput': 'Assesses estimated per-client throughput and investigates capacity or coverage constraints impacting user experience.',
+                'time-to-connect': 'Measures the time from when a client sends an association packet to when it can successfully move data.',
+                
+                // Wired SLEs
+                'switch-health': 'Monitors the operational status and performance of network switches, including reboot incidents and connectivity issues.',
+                'switch-stc': 'Measures clients\' ability to connect to the wired network. Uses 802.1X events or DHCP snooping to identify connection failures.',
+                'switch-throughput': 'Represents the ability of wired users to pass traffic without impedance. Classifiers include Storm Control, Cable Issues, Negotiation Failed, and MTU Mismatch.',
+                
+                // WAN SLEs
+                'gateway-health': 'Monitors the operational status and performance of gateway devices, including availability and connectivity to the cloud.',
+                'gateway-bandwidth': 'Measures available bandwidth based on queued and dropped packets. The ratio of dropped to queued packets determines congestion.',
+                'wan-link-health': 'Assesses the health and reliability of individual WAN links, tracking latency, jitter, and packet loss.',
+                'application-health': 'Monitors the performance of applications over the WAN, tracking issues like disconnects, latency, jitter, and packet loss.'
+            };
+            
+            // Update each SLE category
+            updateSleCategoryDisplay('wifi', sle.wifi, metricNames, metricDescriptions);
+            updateSleCategoryDisplay('wired', sle.wired, metricNames, metricDescriptions);
+            updateSleCategoryDisplay('wan', sle.wan, metricNames, metricDescriptions);
+        }
+        
+        // Update a single SLE category display
+        function updateSleCategoryDisplay(category, data, metricNames, metricDescriptions) {
+            const container = document.getElementById(`${category}SleMetrics`);
+            const badge = document.getElementById(`${category}SleAvailable`);
+            
+            if (!data || !data.available || Object.keys(data.metrics).length === 0) {
+                container.innerHTML = '<div class="text-center text-secondary py-3">No SLE data available for this site</div>';
+                badge.textContent = 'N/A';
+                badge.className = 'badge bg-secondary';
+                return;
             }
             
-            // Wired SLE
-            if (sle.wired) {
-                const wiredValue = Math.round(sle.wired.sle * 100);
-                document.getElementById('wiredSle').textContent = wiredValue + '%';
-                const wiredMeter = document.getElementById('wiredSleMeter');
-                wiredMeter.style.width = wiredValue + '%';
-                wiredMeter.className = `sle-fill ${getSleClass(wiredValue)}`;
-            } else {
-                document.getElementById('wiredSle').textContent = 'N/A';
-                document.getElementById('wiredSleMeter').style.width = '0%';
-            }
+            const metrics = data.metrics;
+            const metricCount = Object.keys(metrics).length;
             
-            // WAN SLE
-            if (sle.wan) {
-                const wanValue = Math.round(sle.wan.sle * 100);
-                document.getElementById('wanSle').textContent = wanValue + '%';
-                const wanMeter = document.getElementById('wanSleMeter');
-                wanMeter.style.width = wanValue + '%';
-                wanMeter.className = `sle-fill ${getSleClass(wanValue)}`;
-            } else {
-                document.getElementById('wanSle').textContent = 'N/A';
-                document.getElementById('wanSleMeter').style.width = '0%';
-            }
+            // Calculate average for the badge
+            const values = Object.values(metrics);
+            const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+            badge.textContent = Math.round(avgValue) + '%';
+            badge.className = `badge ${getBadgeClass(avgValue)}`;
+            
+            // Build the metrics HTML
+            let html = '<div class="row">';
+            
+            Object.entries(metrics).forEach(([metric, value], index) => {
+                const displayName = metricNames[metric] || formatMetricName(metric);
+                const description = metricDescriptions[metric] || '';
+                const colorClass = getSleClass(value);
+                const valueColorClass = getValueColorClass(value);
+                
+                html += `
+                    <div class="col-md-6">
+                        <div class="sle-metric-row">
+                            <span class="sle-metric-name" ${description ? `title="${description}" data-bs-toggle="tooltip" data-bs-placement="top"` : ''}>${displayName}${description ? ' <i class="bi bi-info-circle" style="font-size: 0.75rem; opacity: 0.6;"></i>' : ''}</span>
+                            <div class="sle-metric-bar">
+                                <div class="sle-metric-fill ${colorClass}" style="width: ${Math.min(value, 100)}%;"></div>
+                            </div>
+                            <span class="sle-metric-value ${valueColorClass}">${value}%</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+            
+            // Initialize tooltips for the newly added elements
+            const tooltipTriggerList = container.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+        }
+        
+        // Format metric name from kebab-case
+        function formatMetricName(name) {
+            return name.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+        
+        // Get badge class based on value
+        function getBadgeClass(value) {
+            if (value >= 80) return 'bg-success';
+            if (value >= 50) return 'bg-warning';
+            return 'bg-danger';
+        }
+        
+        // Get value color class
+        function getValueColorClass(value) {
+            if (value >= 80) return 'good';
+            if (value >= 50) return 'warning';
+            return 'poor';
         }
 
         // Event listeners

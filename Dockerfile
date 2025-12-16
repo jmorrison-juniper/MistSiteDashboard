@@ -19,6 +19,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+# Add Zscaler root certificate for corporate proxy environments
+COPY zscaler-root-ca.crt /usr/local/share/ca-certificates/zscaler-root-ca.crt
+RUN update-ca-certificates
+
+# Set SSL/TLS environment variables for Python requests
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 # Create non-root user for security
 RUN groupadd -r mistdash && useradd -r -g mistdash -m -s /bin/bash mistdash
 

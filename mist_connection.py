@@ -32,7 +32,7 @@ class MistConnection:
         """Get or create an API session."""
         if self.session is None:
             self.session = mistapi.APISession(
-                host=f"https://{self.api_host}",
+                host=self.api_host,
                 apitoken=self.api_token
             )
         return self.session
@@ -135,6 +135,7 @@ class MistConnection:
                 status = device.get("status", "unknown")
                 is_connected = status == "connected"
                 
+                # Base device summary
                 device_summary = {
                     "id": device.get("id"),
                     "name": device.get("name", "Unknown"),
@@ -144,15 +145,33 @@ class MistConnection:
                     "ip": device.get("ip", ""),
                     "version": device.get("version", ""),
                     "uptime": device.get("uptime", 0),
-                    "last_seen": device.get("last_seen", 0)
+                    "last_seen": device.get("last_seen", 0),
+                    "serial": device.get("serial", ""),
+                    "notes": device.get("notes", "")
                 }
                 
-                # Categorize by device type
+                # Categorize by device type and add type-specific fields
                 if device_type == "ap":
+                    # AP-specific fields
+                    device_summary["num_clients"] = device.get("num_clients", 0) or 0
+                    device_summary["power_src"] = device.get("power_src", "")
+                    device_summary["power_opmode"] = device.get("power_opmode", "")
+                    # Get port speed from port_stat
+                    port_stat = device.get("port_stat", {})
+                    eth0_stat = port_stat.get("eth0", {})
+                    device_summary["port_speed"] = eth0_stat.get("speed", 0)
+                    
                     health_data["aps"]["total"] += 1
                     health_data["aps"]["connected" if is_connected else "disconnected"] += 1
                     health_data["aps"]["devices"].append(device_summary)
                 elif device_type == "switch":
+                    # Switch-specific fields
+                    clients_stats = device.get("clients_stats", {}).get("total", {})
+                    device_summary["num_wired_clients"] = clients_stats.get("num_wired_clients", 0) or 0
+                    # num_aps comes as a list, get the first value
+                    num_aps = clients_stats.get("num_aps", [0])
+                    device_summary["num_aps"] = num_aps[0] if isinstance(num_aps, list) and num_aps else 0
+                    
                     health_data["switches"]["total"] += 1
                     health_data["switches"]["connected" if is_connected else "disconnected"] += 1
                     health_data["switches"]["devices"].append(device_summary)
@@ -178,42 +197,82 @@ class MistConnection:
             raise
     
     def get_site_sle(self, site_id: str) -> Dict[str, Any]:
-        """Get SLE (Service Level Experience) metrics for a site."""
+        """Get SLE (Service Level Experience) metrics for a site with subcategories."""
         try:
             session = self._get_session()
             
             sle_data = {
-                "wifi": None,
-                "wired": None,
-                "wan": None
+                "wifi": {"metrics": {}, "available": False},
+                "wired": {"metrics": {}, "available": False},
+                "wan": {"metrics": {}, "available": False}
             }
             
-            # Fetch SLE data for each category
-            sle_types = ["wifi", "wired", "wan"]
+            # Define which metrics belong to which category
+            metric_categories = {
+                "wifi": ["coverage", "capacity", "time-to-connect", "roaming", "throughput", "ap-availability", "ap-health"],
+                "wired": ["switch-health", "switch-throughput", "switch-stc"],
+                "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
+            }
             
-            for sle_type in sle_types:
+            # Get list of enabled metrics for the site
+            try:
+                metrics_response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
+                    session,
+                    site_id,
+                    scope="site",
+                    scope_id=site_id
+                )
+                metrics_data = metrics_response.data if hasattr(metrics_response, "data") else metrics_response
+                enabled_metrics = metrics_data.get("enabled", []) if metrics_data else []
+            except Exception as e:
+                logger.debug(f"Could not get enabled metrics for site {site_id}: {e}")
+                enabled_metrics = []
+            
+            # Fetch summary for each enabled metric and categorize
+            for metric in enabled_metrics:
+                # Determine which category this metric belongs to
+                category = None
+                for cat, cat_metrics in metric_categories.items():
+                    if metric in cat_metrics or any(metric.startswith(m) for m in cat_metrics):
+                        category = cat
+                        break
+                
+                if not category:
+                    continue
+                    
                 try:
-                    response = mistapi.api.v1.sites.sle.getSiteSle(
+                    summary_response = mistapi.api.v1.sites.sle.getSiteSleSummary(
                         session,
                         site_id,
                         scope="site",
                         scope_id=site_id,
-                        metric=sle_type,
+                        metric=metric,
                         duration="1d"
                     )
-                    data = response.data if hasattr(response, "data") else response
+                    summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
                     
-                    if data:
-                        sle_data[sle_type] = {
-                            "sle": data.get("sle", 0),
-                            "classifiers": data.get("classifiers", []),
-                            "start": data.get("start", 0),
-                            "end": data.get("end", 0)
-                        }
+                    if summary_data and "sle" in summary_data:
+                        # Calculate SLE percentage from samples
+                        sle_info = summary_data.get("sle", {})
+                        samples = sle_info.get("samples", {})
+                        total_samples = samples.get("total", [])
+                        degraded_samples = samples.get("degraded", [])
                         
-                except Exception as sle_error:
-                    logger.debug(f"Could not fetch {sle_type} SLE for site {site_id}: {sle_error}")
-                    sle_data[sle_type] = None
+                        # Sum up totals and degraded values (skip None values)
+                        total_sum = sum([x for x in total_samples if x is not None])
+                        degraded_sum = sum([x for x in degraded_samples if x is not None])
+                        
+                        if total_sum > 0:
+                            sle_value = ((total_sum - degraded_sum) / total_sum) * 100
+                            sle_data[category]["available"] = True
+                            # Use a cleaner metric name for display
+                            display_name = metric.replace("-v2", "").replace("-v4", "").replace("-new", "")
+                            # Avoid duplicates (e.g., switch-health and switch-health-v2)
+                            if display_name not in sle_data[category]["metrics"]:
+                                sle_data[category]["metrics"][display_name] = round(sle_value, 1)
+                            
+                except Exception as metric_error:
+                    logger.debug(f"Could not fetch {metric} for site {site_id}: {metric_error}")
             
             return sle_data
             
