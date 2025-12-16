@@ -116,26 +116,54 @@ https://manage.mist.com/admin/?org_id=YOUR_ORG_ID_HERE
 
 Or leave it empty and the dashboard will auto-detect your first available organization.
 
-## Local Development
+## Running as a Python Script (No Container)
+
+If you prefer to run the dashboard directly without a container:
+
+### Quick Start (Script)
 
 ```bash
 # Clone the repository
 git clone https://github.com/jmorrison-juniper/MistSiteDashboard.git
 cd MistSiteDashboard
 
-# Create virtual environment
-python -m venv venv
+# Create and activate virtual environment
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy and configure environment
+# Create your .env file
 cp .env.example .env
-# Edit .env with your Mist credentials
+```
 
-# Run the application
+Edit the `.env` file with your credentials:
+```env
+MIST_APITOKEN=your_api_token_here
+MIST_ORG_ID=your_org_id_here
+MIST_HOST=api.mist.com
+```
+
+Run the application:
+```bash
 python app.py
+```
+
+Access at: `http://localhost:5000`
+
+> **Note:** The `.env` file is automatically loaded by the application. Keep it in the same directory as `app.py`.
+
+### Running in Background (Linux/macOS)
+
+```bash
+# Run in background with nohup
+nohup python app.py > dashboard.log 2>&1 &
+
+# Or use screen/tmux for persistent sessions
+screen -S mistsitedashboard
+python app.py
+# Press Ctrl+A, then D to detach
 ```
 
 ## API Endpoints
