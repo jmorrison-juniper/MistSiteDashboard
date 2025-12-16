@@ -17,7 +17,37 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 
 ## Quick Start
 
-### Docker
+### Using Docker/Podman with Environment File (Recommended)
+
+1. **Pull the container image:**
+   ```bash
+   docker pull ghcr.io/jmorrison-juniper/mistsitedashboard:latest
+   ```
+
+2. **Create a `.env` file** in your preferred directory (e.g., `~/mistsitedashboard/.env`):
+   ```bash
+   mkdir -p ~/mistsitedashboard
+   cat > ~/mistsitedashboard/.env << 'EOF'
+   MIST_APITOKEN=your_api_token_here
+   MIST_ORG_ID=your_org_id_here
+   MIST_HOST=api.mist.com
+   EOF
+   ```
+   
+   > **Note:** For EU cloud, use `MIST_HOST=api.eu.mist.com`
+
+3. **Run the container:**
+   ```bash
+   docker run -d \
+     --name mistsitedashboard \
+     -p 5000:5000 \
+     --env-file ~/mistsitedashboard/.env \
+     ghcr.io/jmorrison-juniper/mistsitedashboard:latest
+   ```
+
+4. **Access the dashboard** at: `http://localhost:5000`
+
+### Using Inline Environment Variables
 
 ```bash
 docker run -d \
@@ -30,6 +60,8 @@ docker run -d \
 
 ### Docker Compose
 
+Create a `docker-compose.yml` file:
+
 ```yaml
 services:
   mistsitedashboard:
@@ -37,16 +69,24 @@ services:
     container_name: mistsitedashboard
     ports:
       - "5000:5000"
-    environment:
-      - MIST_APITOKEN=your_api_token_here
-      - MIST_ORG_ID=your_org_id_here
-      - TZ=UTC
-    volumes:
-      - ./config:/config
+    env_file:
+      - .env
     restart: unless-stopped
 ```
 
-Then run: `docker-compose up -d`
+Create a `.env` file in the same directory:
+
+```env
+MIST_APITOKEN=your_api_token_here
+MIST_ORG_ID=your_org_id_here
+MIST_HOST=api.mist.com
+TZ=America/Chicago
+```
+
+Then run:
+```bash
+docker-compose up -d
+```
 
 Access at: `http://your-server-ip:5000`
 
