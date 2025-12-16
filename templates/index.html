@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mist Site Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent-green: #00d26a;
+            --accent-red: #ff6b6b;
+            --accent-yellow: #ffc107;
+            --accent-blue: #4dabf7;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background-color: var(--bg-secondary) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .navbar-brand {
+            color: var(--text-primary) !important;
+            font-weight: 600;
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card-header {
+            background-color: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .form-select, .form-control {
+            background-color: var(--bg-secondary);
+            border-color: rgba(255,255,255,0.2);
+            color: var(--text-primary);
+        }
+        
+        .form-select:focus, .form-control:focus {
+            background-color: var(--bg-secondary);
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 0.25rem rgba(77, 171, 247, 0.25);
+        }
+        
+        .form-select option {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        
+        .btn-primary {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .btn-primary:hover {
+            background-color: #3a9ae8;
+            border-color: #3a9ae8;
+        }
+        
+        .health-card {
+            text-align: center;
+            padding: 1.5rem;
+        }
+        
+        .health-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .health-count {
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .health-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-connected {
+            color: var(--accent-green);
+        }
+        
+        .status-disconnected {
+            color: var(--accent-red);
+        }
+        
+        .sle-meter {
+            height: 20px;
+            border-radius: 10px;
+            background-color: rgba(255,255,255,0.1);
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .sle-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .sle-good { background: linear-gradient(90deg, var(--accent-green), #00b359); }
+        .sle-warning { background: linear-gradient(90deg, var(--accent-yellow), #e6ac00); }
+        .sle-poor { background: linear-gradient(90deg, var(--accent-red), #e65c5c); }
+        
+        .sle-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .sle-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .device-table {
+            font-size: 0.9rem;
+        }
+        
+        .device-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .device-table td {
+            vertical-align: middle;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.connected {
+            background-color: rgba(0, 210, 106, 0.2);
+            color: var(--accent-green);
+        }
+        
+        .status-badge.disconnected {
+            background-color: rgba(255, 107, 107, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        #siteSearch {
+            margin-bottom: 0.5rem;
+        }
+        
+        .connection-status {
+            font-size: 0.85rem;
+        }
+        
+        .connection-status.connected {
+            color: var(--accent-green);
+        }
+        
+        .connection-status.disconnected {
+            color: var(--accent-red);
+        }
+        
+        .tab-content {
+            padding-top: 1rem;
+        }
+        
+        .nav-tabs {
+            border-bottom-color: rgba(255,255,255,0.1);
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--text-secondary);
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            color: var(--text-primary);
+            border-color: transparent;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--accent-blue);
+            background-color: transparent;
+            border-color: transparent;
+            border-bottom-color: var(--accent-blue);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-router me-2"></i>Mist Site Dashboard
+            </a>
+            <div class="d-flex align-items-center">
+                <span id="connectionStatus" class="connection-status me-3">
+                    <i class="bi bi-circle-fill me-1"></i>
+                    <span id="connectionText">Not Connected</span>
+                </span>
+                <button id="testConnectionBtn" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-plug me-1"></i>Test Connection
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <!-- Site Selector -->
+        <div class="row mb-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-geo-alt me-2"></i>Select Site
+                    </div>
+                    <div class="card-body">
+                        <input type="text" id="siteSearch" class="form-control" placeholder="Search sites...">
+                        <select id="siteSelector" class="form-select" disabled>
+                            <option value="">Connect to Mist API first...</option>
+                        </select>
+                        <button id="loadSitesBtn" class="btn btn-primary w-100 mt-3" disabled>
+                            <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                            <i class="bi bi-arrow-clockwise me-1"></i>Load Sites
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-8">
+                <div id="siteInfo" class="card h-100" style="display: none;">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle me-2"></i>Site Information
+                    </div>
+                    <div class="card-body">
+                        <h4 id="siteName" class="mb-2">-</h4>
+                        <p id="siteAddress" class="text-secondary mb-0">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health Summary -->
+        <div id="healthSection" style="display: none;">
+            <h5 class="mb-3"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-wifi text-info"></i></div>
+                        <div class="health-count" id="apCount">-</div>
+                        <div class="health-label">Access Points</div>
+                        <div class="mt-2">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span></span>
+                            <span class="mx-2">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-hdd-stack text-warning"></i></div>
+                        <div class="health-count" id="switchCount">-</div>
+                        <div class="health-label">Switches</div>
+                        <div class="mt-2">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span></span>
+                            <span class="mx-2">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-router text-success"></i></div>
+                        <div class="health-count" id="gatewayCount">-</div>
+                        <div class="health-label">Gateways</div>
+                        <div class="mt-2">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span></span>
+                            <span class="mx-2">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLE Metrics -->
+            <h5 class="mb-3"><i class="bi bi-graph-up me-2"></i>Service Level Experience (SLE)</h5>
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="sle-label">WiFi SLE</div>
+                                    <div class="sle-value" id="wifiSle">-</div>
+                                </div>
+                                <i class="bi bi-wifi text-info" style="font-size: 2rem; opacity: 0.5;"></i>
+                            </div>
+                            <div class="sle-meter">
+                                <div id="wifiSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="sle-label">Wired SLE</div>
+                                    <div class="sle-value" id="wiredSle">-</div>
+                                </div>
+                                <i class="bi bi-ethernet text-warning" style="font-size: 2rem; opacity: 0.5;"></i>
+                            </div>
+                            <div class="sle-meter">
+                                <div id="wiredSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="sle-label">WAN SLE</div>
+                                    <div class="sle-value" id="wanSle">-</div>
+                                </div>
+                                <i class="bi bi-globe text-success" style="font-size: 2rem; opacity: 0.5;"></i>
+                            </div>
+                            <div class="sle-meter">
+                                <div id="wanSleMeter" class="sle-fill sle-good" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Details Tabs -->
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="aps-tab" data-bs-toggle="tab" data-bs-target="#aps-pane" type="button" role="tab">
+                                <i class="bi bi-wifi me-1"></i>Access Points
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="switches-tab" data-bs-toggle="tab" data-bs-target="#switches-pane" type="button" role="tab">
+                                <i class="bi bi-hdd-stack me-1"></i>Switches
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="gateways-tab" data-bs-toggle="tab" data-bs-target="#gateways-pane" type="button" role="tab">
+                                <i class="bi bi-router me-1"></i>Gateways
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="aps-pane" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover device-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Model</th>
+                                            <th>Status</th>
+                                            <th>IP Address</th>
+                                            <th>Version</th>
+                                            <th>Uptime</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="apsTable">
+                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="switches-pane" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover device-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Model</th>
+                                            <th>Status</th>
+                                            <th>IP Address</th>
+                                            <th>Version</th>
+                                            <th>Uptime</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="switchesTable">
+                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="gateways-pane" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover device-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Model</th>
+                                            <th>Status</th>
+                                            <th>IP Address</th>
+                                            <th>Version</th>
+                                            <th>Uptime</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="gatewaysTable">
+                                        <tr><td colspan="6" class="text-center text-secondary">Select a site to view devices</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state">
+            <i class="bi bi-router"></i>
+            <h4>Welcome to Mist Site Dashboard</h4>
+            <p>Connect to the Mist API and select a site to view device health and SLE metrics.</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // State management
+        let sites = [];
+        let currentSiteId = null;
+        let isConnected = false;
+
+        // DOM elements
+        const testConnectionBtn = document.getElementById('testConnectionBtn');
+        const loadSitesBtn = document.getElementById('loadSitesBtn');
+        const siteSelector = document.getElementById('siteSelector');
+        const siteSearch = document.getElementById('siteSearch');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionText = document.getElementById('connectionText');
+        const healthSection = document.getElementById('healthSection');
+        const emptyState = document.getElementById('emptyState');
+        const siteInfo = document.getElementById('siteInfo');
+
+        // Format uptime to human readable
+        function formatUptime(seconds) {
+            if (!seconds || seconds === 0) return '-';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+
+        // Get SLE class based on value
+        function getSleClass(value) {
+            if (value >= 80) return 'sle-good';
+            if (value >= 50) return 'sle-warning';
+            return 'sle-poor';
+        }
+
+        // Update connection status display
+        function updateConnectionStatus(connected, orgName = '') {
+            isConnected = connected;
+            connectionStatus.className = `connection-status me-3 ${connected ? 'connected' : 'disconnected'}`;
+            connectionText.textContent = connected ? `Connected: ${orgName}` : 'Not Connected';
+            loadSitesBtn.disabled = !connected;
+            siteSelector.disabled = !connected;
+        }
+
+        // Test API connection
+        async function testConnection() {
+            testConnectionBtn.disabled = true;
+            testConnectionBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing...';
+            
+            try {
+                const response = await fetch('/api/test-connection', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateConnectionStatus(true, data.org_name);
+                    loadSites();
+                } else {
+                    updateConnectionStatus(false);
+                    alert('Connection failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                updateConnectionStatus(false);
+                alert('Connection error: ' + error.message);
+            } finally {
+                testConnectionBtn.disabled = false;
+                testConnectionBtn.innerHTML = '<i class="bi bi-plug me-1"></i>Test Connection';
+            }
+        }
+
+        // Load sites from API
+        async function loadSites() {
+            loadSitesBtn.classList.add('loading');
+            loadSitesBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/sites');
+                const data = await response.json();
+                
+                if (data.success) {
+                    sites = data.sites;
+                    populateSiteSelector(sites);
+                } else {
+                    alert('Failed to load sites: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error loading sites: ' + error.message);
+            } finally {
+                loadSitesBtn.classList.remove('loading');
+                loadSitesBtn.disabled = false;
+            }
+        }
+
+        // Populate site selector dropdown
+        function populateSiteSelector(siteList) {
+            siteSelector.innerHTML = '<option value="">Select a site...</option>';
+            siteList.forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.id;
+                option.textContent = site.name;
+                option.dataset.address = site.address || '';
+                siteSelector.appendChild(option);
+            });
+        }
+
+        // Filter sites based on search
+        function filterSites() {
+            const searchTerm = siteSearch.value.toLowerCase();
+            const filteredSites = sites.filter(site => 
+                site.name.toLowerCase().includes(searchTerm) ||
+                (site.address && site.address.toLowerCase().includes(searchTerm))
+            );
+            populateSiteSelector(filteredSites);
+        }
+
+        // Load site health data
+        async function loadSiteHealth(siteId) {
+            try {
+                const [healthResponse, sleResponse] = await Promise.all([
+                    fetch(`/api/sites/${siteId}/health`),
+                    fetch(`/api/sites/${siteId}/sle`)
+                ]);
+                
+                const healthData = await healthResponse.json();
+                const sleData = await sleResponse.json();
+                
+                if (healthData.success) {
+                    updateHealthDisplay(healthData.health);
+                }
+                
+                if (sleData.success) {
+                    updateSleDisplay(sleData.sle);
+                }
+                
+                emptyState.style.display = 'none';
+                healthSection.style.display = 'block';
+                siteInfo.style.display = 'block';
+                
+            } catch (error) {
+                alert('Error loading site data: ' + error.message);
+            }
+        }
+
+        // Update health display
+        function updateHealthDisplay(health) {
+            // Update counts
+            document.getElementById('apCount').textContent = health.aps.total;
+            document.getElementById('apConnected').textContent = health.aps.connected;
+            document.getElementById('apDisconnected').textContent = health.aps.disconnected;
+            
+            document.getElementById('switchCount').textContent = health.switches.total;
+            document.getElementById('switchConnected').textContent = health.switches.connected;
+            document.getElementById('switchDisconnected').textContent = health.switches.disconnected;
+            
+            document.getElementById('gatewayCount').textContent = health.gateways.total;
+            document.getElementById('gatewayConnected').textContent = health.gateways.connected;
+            document.getElementById('gatewayDisconnected').textContent = health.gateways.disconnected;
+            
+            // Update device tables
+            updateDeviceTable('apsTable', health.aps.devices);
+            updateDeviceTable('switchesTable', health.switches.devices);
+            updateDeviceTable('gatewaysTable', health.gateways.devices);
+        }
+
+        // Update device table
+        function updateDeviceTable(tableId, devices) {
+            const tbody = document.getElementById(tableId);
+            
+            if (!devices || devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary">No devices found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = devices.map(device => `
+                <tr>
+                    <td>${device.name || '-'}</td>
+                    <td>${device.model || '-'}</td>
+                    <td><span class="status-badge ${device.status}">${device.status}</span></td>
+                    <td>${device.ip || '-'}</td>
+                    <td>${device.version || '-'}</td>
+                    <td>${formatUptime(device.uptime)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Update SLE display
+        function updateSleDisplay(sle) {
+            // WiFi SLE
+            if (sle.wifi) {
+                const wifiValue = Math.round(sle.wifi.sle * 100);
+                document.getElementById('wifiSle').textContent = wifiValue + '%';
+                const wifiMeter = document.getElementById('wifiSleMeter');
+                wifiMeter.style.width = wifiValue + '%';
+                wifiMeter.className = `sle-fill ${getSleClass(wifiValue)}`;
+            } else {
+                document.getElementById('wifiSle').textContent = 'N/A';
+                document.getElementById('wifiSleMeter').style.width = '0%';
+            }
+            
+            // Wired SLE
+            if (sle.wired) {
+                const wiredValue = Math.round(sle.wired.sle * 100);
+                document.getElementById('wiredSle').textContent = wiredValue + '%';
+                const wiredMeter = document.getElementById('wiredSleMeter');
+                wiredMeter.style.width = wiredValue + '%';
+                wiredMeter.className = `sle-fill ${getSleClass(wiredValue)}`;
+            } else {
+                document.getElementById('wiredSle').textContent = 'N/A';
+                document.getElementById('wiredSleMeter').style.width = '0%';
+            }
+            
+            // WAN SLE
+            if (sle.wan) {
+                const wanValue = Math.round(sle.wan.sle * 100);
+                document.getElementById('wanSle').textContent = wanValue + '%';
+                const wanMeter = document.getElementById('wanSleMeter');
+                wanMeter.style.width = wanValue + '%';
+                wanMeter.className = `sle-fill ${getSleClass(wanValue)}`;
+            } else {
+                document.getElementById('wanSle').textContent = 'N/A';
+                document.getElementById('wanSleMeter').style.width = '0%';
+            }
+        }
+
+        // Event listeners
+        testConnectionBtn.addEventListener('click', testConnection);
+        loadSitesBtn.addEventListener('click', loadSites);
+        siteSearch.addEventListener('input', filterSites);
+        
+        siteSelector.addEventListener('change', function() {
+            const siteId = this.value;
+            if (siteId) {
+                currentSiteId = siteId;
+                const selectedOption = this.options[this.selectedIndex];
+                document.getElementById('siteName').textContent = selectedOption.textContent;
+                document.getElementById('siteAddress').textContent = selectedOption.dataset.address || 'No address';
+                loadSiteHealth(siteId);
+            } else {
+                currentSiteId = null;
+                healthSection.style.display = 'none';
+                siteInfo.style.display = 'none';
+                emptyState.style.display = 'block';
+            }
+        });
+
+        // Auto-test connection on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            testConnection();
+        });
+    </script>
+</body>
+</html>

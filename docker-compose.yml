@@ -1,0 +1,15 @@
+services:
+  mistsitedashboard:
+    image: ghcr.io/jmorrison-juniper/mistsitedashboard:latest
+    container_name: mistsitedashboard
+    ports:
+      - "5000:5000"
+    environment:
+      - MIST_APITOKEN=${MIST_APITOKEN}
+      - MIST_ORG_ID=${MIST_ORG_ID}
+      - MIST_HOST=${MIST_HOST:-api.mist.com}
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/config
+    restart: unless-stopped
