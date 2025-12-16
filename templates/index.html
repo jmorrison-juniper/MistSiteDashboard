@@ -80,6 +80,25 @@
             color: #FFFFFF;
         }
         
+        /* Time range button group styling */
+        .btn-check:checked + .btn-outline-primary {
+            background-color: var(--tm-magenta);
+            border-color: var(--tm-magenta);
+            color: #FFFFFF;
+        }
+        
+        .btn-outline-primary {
+            color: var(--text-secondary);
+            border-color: rgba(255,255,255,0.3);
+            background-color: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            background-color: rgba(226, 0, 116, 0.2);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
         /* Site name styling */
         #siteName {
             color: #FFFFFF;
@@ -454,7 +473,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-lg-8">
+            <div class="col-md-6 col-lg-4">
                 <div id="siteInfo" class="card h-100" style="display: none;">
                     <div class="card-header">
                         <i class="bi bi-info-circle me-2"></i>Site Information
@@ -462,6 +481,29 @@
                     <div class="card-body">
                         <h4 id="siteName" class="mb-2">-</h4>
                         <p id="siteAddress" class="text-secondary mb-0">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div id="sleTimeRange" class="card h-100" style="display: none;">
+                    <div class="card-header">
+                        <i class="bi bi-clock-history me-2"></i>SLE Time Range
+                    </div>
+                    <div class="card-body">
+                        <div class="btn-group w-100" role="group" aria-label="SLE Time Range">
+                            <input type="radio" class="btn-check" name="sleTimeRange" id="range1h" value="1h">
+                            <label class="btn btn-outline-primary" for="range1h">Last Hour</label>
+                            
+                            <input type="radio" class="btn-check" name="sleTimeRange" id="rangeToday" value="today">
+                            <label class="btn btn-outline-primary" for="rangeToday">Today</label>
+                            
+                            <input type="radio" class="btn-check" name="sleTimeRange" id="range1d" value="1d" checked>
+                            <label class="btn btn-outline-primary" for="range1d">24 Hours</label>
+                            
+                            <input type="radio" class="btn-check" name="sleTimeRange" id="range1w" value="1w">
+                            <label class="btn btn-outline-primary" for="range1w">7 Days</label>
+                        </div>
+                        <p class="text-secondary small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>Select time range for SLE metrics</p>
                     </div>
                 </div>
             </div>
@@ -663,6 +705,7 @@
         let sites = [];
         let currentSiteId = null;
         let isConnected = false;
+        let currentDuration = '1d';
 
         // DOM elements
         const testConnectionBtn = document.getElementById('testConnectionBtn');
@@ -674,6 +717,7 @@
         const healthSection = document.getElementById('healthSection');
         const emptyState = document.getElementById('emptyState');
         const siteInfo = document.getElementById('siteInfo');
+        const sleTimeRange = document.getElementById('sleTimeRange');
 
         // Format uptime to human readable
         function formatUptime(seconds) {
@@ -791,7 +835,7 @@
                 const healthPromise = fetch(`/api/sites/${siteId}/health`);
                 
                 loadingDetail.textContent = 'Requesting SLE metrics...';
-                const slePromise = fetch(`/api/sites/${siteId}/sle`);
+                const slePromise = fetch(`/api/sites/${siteId}/sle?duration=${currentDuration}`);
                 
                 // Wait for both responses
                 loadingDetail.textContent = 'Waiting for API responses...';
@@ -823,11 +867,50 @@
                 emptyState.style.display = 'none';
                 healthSection.style.display = 'block';
                 siteInfo.style.display = 'block';
+                sleTimeRange.style.display = 'block';
                 
             } catch (error) {
                 loadingProgress.classList.remove('active');
                 alert('Error loading site data: ' + error.message);
             }
+        }
+        
+        // Refresh only SLE data (for time range changes)
+        async function refreshSleData() {
+            if (!currentSiteId) return;
+            
+            const loadingProgress = document.getElementById('loadingProgress');
+            const loadingText = document.getElementById('loadingText');
+            const loadingDetail = document.getElementById('loadingDetail');
+            
+            loadingProgress.classList.add('active');
+            loadingText.textContent = 'Refreshing SLE metrics...';
+            loadingDetail.textContent = `Fetching data for ${getDurationLabel(currentDuration)}`;
+            
+            try {
+                const response = await fetch(`/api/sites/${currentSiteId}/sle?duration=${currentDuration}`);
+                const sleData = await response.json();
+                
+                if (sleData.success) {
+                    updateSleDisplay(sleData.sle);
+                }
+                
+                loadingProgress.classList.remove('active');
+            } catch (error) {
+                loadingProgress.classList.remove('active');
+                alert('Error refreshing SLE data: ' + error.message);
+            }
+        }
+        
+        // Get human-readable duration label
+        function getDurationLabel(duration) {
+            const labels = {
+                '1h': 'Last Hour',
+                'today': 'Today',
+                '1d': '24 Hours',
+                '1w': '7 Days'
+            };
+            return labels[duration] || duration;
         }
 
         // Update health display
@@ -1051,6 +1134,14 @@
         loadSitesBtn.addEventListener('click', loadSites);
         siteSearch.addEventListener('input', filterSites);
         
+        // Time range selector change handler
+        document.querySelectorAll('input[name="sleTimeRange"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                currentDuration = this.value;
+                refreshSleData();
+            });
+        });
+        
         siteSelector.addEventListener('change', function() {
             const siteId = this.value;
             if (siteId) {
@@ -1063,6 +1154,7 @@
                 currentSiteId = null;
                 healthSection.style.display = 'none';
                 siteInfo.style.display = 'none';
+                sleTimeRange.style.display = 'none';
                 emptyState.style.display = 'block';
             }
         });

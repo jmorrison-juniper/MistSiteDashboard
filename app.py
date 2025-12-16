@@ -101,9 +101,14 @@ def get_site_sle(site_id):
     """Get SLE (Service Level Experience) metrics for a specific site."""
     try:
         mist = get_mist_connection()
-        sle_data = mist.get_site_sle(site_id)
-        logger.info(f"Retrieved SLE data for site {site_id}")
-        return jsonify({"success": True, "sle": sle_data})
+        duration = request.args.get("duration", "1d")
+        # Validate duration
+        valid_durations = ["1h", "today", "1d", "1w"]
+        if duration not in valid_durations:
+            duration = "1d"
+        sle_data = mist.get_site_sle(site_id, duration=duration)
+        logger.info(f"Retrieved SLE data for site {site_id} (duration: {duration})")
+        return jsonify({"success": True, "sle": sle_data, "duration": duration})
     except Exception as error:
         logger.error(f"Error fetching site SLE for {site_id}: {error}")
         return jsonify({"success": False, "error": str(error)}), 500

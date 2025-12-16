@@ -196,10 +196,25 @@ class MistConnection:
             logger.error(f"Error fetching site health for {site_id}: {error}")
             raise
     
-    def get_site_sle(self, site_id: str) -> Dict[str, Any]:
-        """Get SLE (Service Level Experience) metrics for a site with subcategories."""
+    def get_site_sle(self, site_id: str, duration: str = "1d") -> Dict[str, Any]:
+        """Get SLE (Service Level Experience) metrics for a site with subcategories.
+        
+        Args:
+            site_id: The site ID to get SLE metrics for
+            duration: Time range - '1h', 'today', '1d', '1w' (default: '1d')
+        """
         try:
             session = self._get_session()
+            
+            # Map duration values to API-compatible formats
+            # Note: 'today' will be handled specially with start/end timestamps
+            duration_map = {
+                '1h': '1h',
+                'today': '1d',  # Will be overridden with timestamps
+                '1d': '1d',
+                '1w': '1w'
+            }
+            api_duration = duration_map.get(duration, '1d')
             
             sle_data = {
                 "wifi": {"metrics": {}, "available": False},
@@ -247,7 +262,7 @@ class MistConnection:
                         scope="site",
                         scope_id=site_id,
                         metric=metric,
-                        duration="1d"
+                        duration=api_duration
                     )
                     summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
                     
