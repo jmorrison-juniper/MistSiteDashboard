@@ -10,9 +10,26 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 
 - **Site Selection**: Browse and search through all sites in your Mist organization
 - **Device Health**: Real-time status of Access Points, Switches, and Gateways
+  - Connected/disconnected counts with visual indicators
+  - Device tables with model, IP, uptime, version, and firmware info
+  - Sortable columns for easy data analysis
 - **SLE Metrics**: WiFi, Wired, and WAN Service Level Experience scores
-- **Device Details**: Drill down into individual device status, uptime, and version info
-- **Dark Mode**: Modern dark theme optimized for NOC environments
+  - Collapsible metric sections with average scores
+  - Configurable time ranges (5 min, 1 hour, today, 24 hours, 7 days)
+  - Color-coded thresholds (green/yellow/red)
+- **Access Point Details**: 
+  - Connected WiFi clients per AP
+  - Currently broadcasting SSIDs (resolved via device profiles)
+  - Click-through to client details page
+- **Gateway WAN Status**:
+  - WAN port status with IP, speed, and traffic stats
+  - VPN peer status with latency, jitter, loss, and MOS metrics
+  - BGP peer status with neighbor info and route counts
+  - Collapsible peer tables with percentage-up indicators
+- **Client Details Pages**: 
+  - AP WiFi clients with signal strength, SSID, band, and data usage
+  - Switch wired clients with port, VLAN, and MAC info
+- **Dark Mode**: Modern dark theme with T-Mobile magenta accents, optimized for NOC environments
 - **Container Ready**: Multi-architecture Docker/Podman support (amd64/arm64)
 
 ## Quick Start
@@ -174,8 +191,14 @@ python app.py
 | `/api/test-connection` | POST | Test Mist API connection |
 | `/api/sites` | GET | List all organization sites |
 | `/api/sites/<id>/health` | GET | Get device health for a site |
-| `/api/sites/<id>/sle` | GET | Get SLE metrics for a site |
+| `/api/sites/<id>/sle` | GET | Get SLE metrics (supports `?duration=` param) |
 | `/api/sites/<id>/devices` | GET | Get device details for a site |
+| `/gateway-wan/<site_id>` | GET | Gateway WAN status page |
+| `/api/gateway/<site_id>/wan` | GET | Gateway WAN data (ports, VPN, BGP) |
+| `/ap-clients/<site_id>/<ap_mac>` | GET | AP WiFi clients page |
+| `/api/ap/<site_id>/<ap_mac>/clients` | GET | AP client data |
+| `/switch-clients/<site_id>/<switch_mac>` | GET | Switch clients page |
+| `/api/switch/<site_id>/<switch_mac>/clients` | GET | Switch client data |
 | `/health` | GET | Container health check |
 
 ## Architecture
@@ -185,19 +208,42 @@ MistSiteDashboard/
 ├── app.py                 # Flask application & routes
 ├── mist_connection.py     # Mist API client
 ├── templates/
-│   └── index.html         # Dashboard UI
+│   ├── index.html         # Main dashboard UI
+│   ├── gateway_wan.html   # Gateway WAN status page
+│   ├── ap_clients.html    # AP WiFi clients page
+│   └── switch_clients.html # Switch wired clients page
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Container build
 ├── docker-compose.yml     # Container orchestration
 └── .github/
     └── workflows/
-        └── container-build.yml  # CI/CD pipeline
+        └── build-and-push.yml  # CI/CD pipeline
 ```
 
 ## Changelog
 
 ```json
 {
+  "24.12.17": {
+    "feature-additions": [
+      "Gateway WAN status page with port details",
+      "VPN peer status with latency, jitter, loss, MOS metrics",
+      "BGP peer status with neighbor info and route counts",
+      "Collapsible VPN/BGP tables with percentage-up indicators",
+      "AP WiFi clients detail page",
+      "Switch wired clients detail page",
+      "SSID display for APs (resolved via device profiles)",
+      "Collapsible SLE metric sections with averages",
+      "SLE time range selector (5min to 7 days)",
+      "Sortable device tables",
+      "Compact health summary cards"
+    ],
+    "fixes": [
+      "API pagination for large sites (100+ devices)",
+      "Invalid Date handling in timestamps",
+      "Improved font readability"
+    ]
+  },
   "24.12.16": {
     "feature-additions": [
       "Initial release",
