@@ -235,6 +235,44 @@
         .path-metric-value.good { color: var(--accent-green); }
         .path-metric-value.warning { color: var(--accent-yellow); }
         .path-metric-value.poor { color: var(--accent-red); }
+        
+        .peer-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 0.5rem 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .peer-section-header:hover {
+            opacity: 0.8;
+        }
+        
+        .peer-section-header .collapse-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .peer-section-header:not(.collapsed) .collapse-icon {
+            transform: rotate(180deg);
+        }
+        
+        .peer-percentage {
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+        
+        .peer-percentage.all-up {
+            color: var(--accent-green);
+            background-color: rgba(0, 200, 83, 0.15);
+        }
+        
+        .peer-percentage.has-down {
+            color: var(--accent-red);
+            background-color: rgba(255, 82, 82, 0.15);
+        }
     </style>
 </head>
 <body>
@@ -374,40 +412,53 @@
             // Render VPN Peers section
             let vpnPeersHtml = '';
             if (gw.vpn_peers && gw.vpn_peers.length > 0) {
+                const vpnUpCount = gw.vpn_peers.filter(v => v.up).length;
+                const vpnTotal = gw.vpn_peers.length;
+                const vpnPercentage = Math.round((vpnUpCount / vpnTotal) * 100);
+                const vpnAllUp = vpnPercentage === 100;
+                const vpnCollapseId = `vpnPeers-${gw.mac.replace(/:/g, '')}`;
+                
                 vpnPeersHtml = `
                     <div class="service-path-card mt-4">
-                        <div class="service-path-title"><i class="bi bi-shield-lock me-2"></i>VPN Peers</div>
-                        <div class="table-responsive">
-                            <table class="table table-dark table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Status</th>
-                                        <th>VPN Name</th>
-                                        <th>WAN</th>
-                                        <th>Peer Router</th>
-                                        <th>Latency</th>
-                                        <th>Jitter</th>
-                                        <th>Loss</th>
-                                        <th>MOS</th>
-                                        <th>Uptime</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${gw.vpn_peers.map(vpn => `
+                        <div class="peer-section-header collapsed" data-bs-toggle="collapse" data-bs-target="#${vpnCollapseId}" aria-expanded="false" aria-controls="${vpnCollapseId}">
+                            <div class="service-path-title mb-0"><i class="bi bi-shield-lock me-2"></i>VPN Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                            <div class="peer-percentage ${vpnAllUp ? 'all-up' : 'has-down'}">
+                                <i class="bi bi-${vpnAllUp ? 'check-circle' : 'exclamation-triangle'} me-1"></i>${vpnPercentage}% Up (${vpnUpCount}/${vpnTotal})
+                            </div>
+                        </div>
+                        <div class="collapse" id="${vpnCollapseId}">
+                            <div class="table-responsive mt-3">
+                                <table class="table table-dark table-sm mb-0">
+                                    <thead>
                                         <tr>
-                                            <td><span class="badge bg-${vpn.up ? 'success' : 'danger'}">${vpn.up ? 'UP' : 'DOWN'}</span></td>
-                                            <td><small>${vpn.vpn_name || '-'}</small></td>
-                                            <td><small>${vpn.wan_name || '-'}</small></td>
-                                            <td>${vpn.peer_router_name || '-'}</td>
-                                            <td class="${getMetricClass('latency', vpn.latency)}">${vpn.latency ? vpn.latency.toFixed(1) + 'ms' : '-'}</td>
-                                            <td class="${getMetricClass('jitter', vpn.jitter)}">${vpn.jitter ? vpn.jitter.toFixed(1) + 'ms' : '-'}</td>
-                                            <td class="${getMetricClass('loss', vpn.loss)}">${vpn.loss ? vpn.loss.toFixed(2) + '%' : '0%'}</td>
-                                            <td class="${getMetricClass('mos', vpn.mos / 100)}">${vpn.mos ? (vpn.mos / 100).toFixed(2) : '-'}</td>
-                                            <td><small>${formatUptime(vpn.uptime)}</small></td>
+                                            <th>Status</th>
+                                            <th>VPN Name</th>
+                                            <th>WAN</th>
+                                            <th>Peer Router</th>
+                                            <th>Latency</th>
+                                            <th>Jitter</th>
+                                            <th>Loss</th>
+                                            <th>MOS</th>
+                                            <th>Uptime</th>
                                         </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        ${gw.vpn_peers.map(vpn => `
+                                            <tr>
+                                                <td><span class="badge bg-${vpn.up ? 'success' : 'danger'}">${vpn.up ? 'UP' : 'DOWN'}</span></td>
+                                                <td><small>${vpn.vpn_name || '-'}</small></td>
+                                                <td><small>${vpn.wan_name || '-'}</small></td>
+                                                <td>${vpn.peer_router_name || '-'}</td>
+                                                <td class="${getMetricClass('latency', vpn.latency)}">${vpn.latency ? vpn.latency.toFixed(1) + 'ms' : '-'}</td>
+                                                <td class="${getMetricClass('jitter', vpn.jitter)}">${vpn.jitter ? vpn.jitter.toFixed(1) + 'ms' : '-'}</td>
+                                                <td class="${getMetricClass('loss', vpn.loss)}">${vpn.loss ? vpn.loss.toFixed(2) + '%' : '0%'}</td>
+                                                <td class="${getMetricClass('mos', vpn.mos / 100)}">${vpn.mos ? (vpn.mos / 100).toFixed(2) : '-'}</td>
+                                                <td><small>${formatUptime(vpn.uptime)}</small></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -416,40 +467,53 @@
             // Render BGP Peers section
             let bgpPeersHtml = '';
             if (gw.bgp_peers && gw.bgp_peers.length > 0) {
+                const bgpUpCount = gw.bgp_peers.filter(b => b.up).length;
+                const bgpTotal = gw.bgp_peers.length;
+                const bgpPercentage = Math.round((bgpUpCount / bgpTotal) * 100);
+                const bgpAllUp = bgpPercentage === 100;
+                const bgpCollapseId = `bgpPeers-${gw.mac.replace(/:/g, '')}`;
+                
                 bgpPeersHtml = `
                     <div class="service-path-card mt-4">
-                        <div class="service-path-title"><i class="bi bi-diagram-2 me-2"></i>BGP Peers</div>
-                        <div class="table-responsive">
-                            <table class="table table-dark table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Status</th>
-                                        <th>Neighbor</th>
-                                        <th>VRF</th>
-                                        <th>Local AS</th>
-                                        <th>Neighbor AS</th>
-                                        <th>State</th>
-                                        <th>RX Routes</th>
-                                        <th>TX Routes</th>
-                                        <th>Uptime</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${gw.bgp_peers.map(bgp => `
+                        <div class="peer-section-header collapsed" data-bs-toggle="collapse" data-bs-target="#${bgpCollapseId}" aria-expanded="false" aria-controls="${bgpCollapseId}">
+                            <div class="service-path-title mb-0"><i class="bi bi-diagram-2 me-2"></i>BGP Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                            <div class="peer-percentage ${bgpAllUp ? 'all-up' : 'has-down'}">
+                                <i class="bi bi-${bgpAllUp ? 'check-circle' : 'exclamation-triangle'} me-1"></i>${bgpPercentage}% Up (${bgpUpCount}/${bgpTotal})
+                            </div>
+                        </div>
+                        <div class="collapse" id="${bgpCollapseId}">
+                            <div class="table-responsive mt-3">
+                                <table class="table table-dark table-sm mb-0">
+                                    <thead>
                                         <tr>
-                                            <td><span class="badge bg-${bgp.up ? 'success' : 'danger'}">${bgp.up ? 'UP' : 'DOWN'}</span></td>
-                                            <td><code>${bgp.neighbor || '-'}</code></td>
-                                            <td>${bgp.vrf_name || 'default'}</td>
-                                            <td>${bgp.local_as || '-'}</td>
-                                            <td>${bgp.neighbor_as || '-'}</td>
-                                            <td><span class="badge bg-${bgp.state === 'established' ? 'success' : 'warning'}">${bgp.state || '-'}</span></td>
-                                            <td>${bgp.rx_routes || 0}</td>
-                                            <td>${bgp.tx_routes || 0}</td>
-                                            <td><small>${formatUptime(bgp.uptime)}</small></td>
+                                            <th>Status</th>
+                                            <th>Neighbor</th>
+                                            <th>VRF</th>
+                                            <th>Local AS</th>
+                                            <th>Neighbor AS</th>
+                                            <th>State</th>
+                                            <th>RX Routes</th>
+                                            <th>TX Routes</th>
+                                            <th>Uptime</th>
                                         </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        ${gw.bgp_peers.map(bgp => `
+                                            <tr>
+                                                <td><span class="badge bg-${bgp.up ? 'success' : 'danger'}">${bgp.up ? 'UP' : 'DOWN'}</span></td>
+                                                <td><code>${bgp.neighbor || '-'}</code></td>
+                                                <td>${bgp.vrf_name || 'default'}</td>
+                                                <td>${bgp.local_as || '-'}</td>
+                                                <td>${bgp.neighbor_as || '-'}</td>
+                                                <td><span class="badge bg-${bgp.state === 'established' ? 'success' : 'warning'}">${bgp.state || '-'}</span></td>
+                                                <td>${bgp.rx_routes || 0}</td>
+                                                <td>${bgp.tx_routes || 0}</td>
+                                                <td><small>${formatUptime(bgp.uptime)}</small></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 `;
