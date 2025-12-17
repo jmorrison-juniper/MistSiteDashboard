@@ -6,6 +6,22 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Container](https://img.shields.io/badge/Container-ghcr.io-purple)
 
+## Screenshots
+
+![Screenshot 1](docs/screenshots/screenshot-01.png)
+
+![Screenshot 2](docs/screenshots/screenshot-02.png)
+
+![Screenshot 3](docs/screenshots/screenshot-03.png)
+
+![Screenshot 4](docs/screenshots/screenshot-04.png)
+
+![Screenshot 5](docs/screenshots/screenshot-05.png)
+
+![Screenshot 6](docs/screenshots/screenshot-06.png)
+
+![Screenshot 7](docs/screenshots/screenshot-07.png)
+
 ## Features
 
 - **Site Selection**: Browse and search through all sites in your Mist organization
