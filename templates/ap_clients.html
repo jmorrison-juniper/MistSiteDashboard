@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AP Client History - Mist Site Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --tm-magenta: #E20074;
+            --tm-magenta-dark: #B8005D;
+            --tm-magenta-light: #FF3399;
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2D2D2D;
+            --bg-card: #3D3D3D;
+            --bg-card-header: #4A4A4A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --accent-green: #00C853;
+            --accent-red: #FF5252;
+            --accent-yellow: #FFD600;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important;
+            border-bottom: none;
+            box-shadow: 0 2px 10px rgba(226, 0, 116, 0.3);
+        }
+        
+        .navbar-brand {
+            color: var(--text-primary) !important;
+            font-weight: 700;
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header {
+            background-color: var(--bg-card-header);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .table-dark {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-border-color: rgba(255,255,255,0.1);
+        }
+        
+        .table-dark thead th {
+            background-color: var(--bg-card-header);
+            color: var(--text-primary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .sortable:hover {
+            background-color: rgba(226, 0, 116, 0.2);
+        }
+        
+        .sortable.sort-asc i::before {
+            content: "\F128"; /* bi-arrow-up */
+        }
+        
+        .sortable.sort-desc i::before {
+            content: "\F126"; /* bi-arrow-down */
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--tm-magenta-light) 0%, var(--tm-magenta) 100%);
+        }
+        
+        .badge.bg-success { background: linear-gradient(135deg, var(--accent-green) 0%, #00A846 100%) !important; }
+        .badge.bg-warning { background: linear-gradient(135deg, var(--accent-yellow) 0%, #E6C200 100%) !important; color: #1A1A1A !important; }
+        .badge.bg-danger { background: linear-gradient(135deg, var(--accent-red) 0%, #E64545 100%) !important; }
+        .badge.bg-info { background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important; }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        .stats-card {
+            text-align: center;
+            padding: 1rem;
+        }
+        
+        .stats-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--tm-magenta);
+        }
+        
+        .stats-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/?site={{ site_id }}">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+            <span class="navbar-text text-white">
+                <i class="bi bi-wifi me-2"></i>Wireless Client History (Last 7 Days)
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <!-- Stats Summary -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card">
+                    <div class="stats-value" id="totalSessions">-</div>
+                    <div class="stats-label">Total Sessions</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card">
+                    <div class="stats-value" id="uniqueClients">-</div>
+                    <div class="stats-label">Unique Clients</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card">
+                    <div class="stats-value" id="uniqueSSIDs">-</div>
+                    <div class="stats-label">SSIDs Used</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card stats-card">
+                    <div class="stats-value" id="avgDuration">-</div>
+                    <div class="stats-label">Avg Duration</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Sessions Table -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history me-2"></i>Client Session History</span>
+                <button id="refreshBtn" class="btn btn-sm btn-primary">
+                    <span class="loading-spinner spinner-border spinner-border-sm me-1"></span>
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="loadingMessage" class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p class="text-secondary">Loading client session data...</p>
+                </div>
+                <div id="dataTable" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover" id="clientTable">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort="is_connected">Status <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="mac">MAC Address <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="hostname">Hostname <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="ip">IP Address <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="username">Username <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="os">OS <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="ssid">SSID <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="sortable" data-sort="last_seen">Last Seen <i class="bi bi-arrow-down-up"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessionsTable">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="emptyMessage" style="display: none;" class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 4rem; color: var(--tm-magenta); opacity: 0.5;"></i>
+                    <p class="text-secondary mt-3">No client sessions found in the last 7 days</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const siteId = '{{ site_id }}';
+        let sessionsData = [];
+        let currentSort = { column: 'is_connected', direction: 'desc' };
+        
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+        
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '-';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            if (minutes > 0) return `${minutes}m ${secs}s`;
+            return `${secs}s`;
+        }
+        
+        function sortData(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+            
+            sessionsData.sort((a, b) => {
+                let aVal = a[column] || '';
+                let bVal = b[column] || '';
+                
+                // Handle numeric comparisons
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+                
+                // Handle string comparisons
+                aVal = String(aVal).toLowerCase();
+                bVal = String(bVal).toLowerCase();
+                
+                if (currentSort.direction === 'asc') {
+                    return aVal.localeCompare(bVal);
+                } else {
+                    return bVal.localeCompare(aVal);
+                }
+            });
+            
+            renderTable();
+            updateSortIndicators();
+        }
+        
+        function updateSortIndicators() {
+            document.querySelectorAll('.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.sort === currentSort.column) {
+                    th.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                }
+            });
+        }
+        
+        function renderTable() {
+            const tbody = document.getElementById('sessionsTable');
+            tbody.innerHTML = sessionsData.map(sess => {
+                const statusBadge = sess.is_connected 
+                    ? '<span class="badge bg-success"><i class="bi bi-wifi me-1"></i>Connected</span>'
+                    : '<span class="badge bg-secondary">Disconnected</span>';
+                return `
+                    <tr>
+                        <td>${statusBadge}</td>
+                        <td><code>${sess.mac || '-'}</code></td>
+                        <td>${sess.hostname || '-'}</td>
+                        <td>${sess.ip || '-'}</td>
+                        <td>${sess.username || '-'}</td>
+                        <td>${sess.os || sess.manufacture || '-'}</td>
+                        <td><span class="badge bg-info">${sess.ssid || '-'}</span></td>
+                        <td><small>${formatTimestamp(sess.last_seen)}</small></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        async function loadData() {
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('dataTable').style.display = 'none';
+            document.getElementById('emptyMessage').style.display = 'none';
+            document.getElementById('refreshBtn').classList.add('loading');
+            
+            try {
+                const response = await fetch(`/api/sites/${siteId}/wireless-clients`);
+                const data = await response.json();
+                
+                if (data.success && data.sessions && data.sessions.length > 0) {
+                    sessionsData = data.sessions;
+                    
+                    // Calculate stats
+                    const uniqueMacs = new Set(sessionsData.map(s => s.mac)).size;
+                    const uniqueSSIDs = new Set(sessionsData.map(s => s.ssid)).size;
+                    const totalDuration = sessionsData.reduce((sum, s) => sum + (s.duration || 0), 0);
+                    const avgDuration = totalDuration / sessionsData.length;
+                    
+                    document.getElementById('totalSessions').textContent = sessionsData.length;
+                    document.getElementById('uniqueClients').textContent = uniqueMacs;
+                    document.getElementById('uniqueSSIDs').textContent = uniqueSSIDs;
+                    document.getElementById('avgDuration').textContent = formatDuration(avgDuration);
+                    
+                    // Sort by connected status first (connected at top) and render
+                    sortData('is_connected');
+                    
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('dataTable').style.display = 'block';
+                } else {
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('emptyMessage').style.display = 'block';
+                    
+                    document.getElementById('totalSessions').textContent = '0';
+                    document.getElementById('uniqueClients').textContent = '0';
+                    document.getElementById('uniqueSSIDs').textContent = '0';
+                    document.getElementById('avgDuration').textContent = '-';
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loadingMessage').innerHTML = `
+                    <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <p class="text-danger mt-3">Error loading data: ${error.message}</p>
+                `;
+            } finally {
+                document.getElementById('refreshBtn').classList.remove('loading');
+            }
+        }
+        
+        // Set up sort click handlers
+        document.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', () => sortData(th.dataset.sort));
+        });
+        
+        document.getElementById('refreshBtn').addEventListener('click', loadData);
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

@@ -182,24 +182,44 @@
         
         .health-card {
             text-align: center;
-            padding: 1.5rem;
+            padding: 0.75rem;
+        }
+        
+        .health-card-clickable {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .health-card-clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(226, 0, 116, 0.3);
+            border-color: var(--tm-magenta);
         }
         
         .health-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.75rem;
+            margin-bottom: 0.25rem;
         }
         
         .health-count {
-            font-size: 2.5rem;
+            font-size: 1.5rem;
             font-weight: 700;
         }
         
         .health-label {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+        }
+        
+        .health-status {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        
+        .health-link {
+            font-size: 0.7rem;
         }
         
         .status-connected {
@@ -283,6 +303,33 @@
             font-size: 0.85rem;
             color: var(--text-secondary);
         }
+        
+        /* Collapsible SLE cards */
+        .sle-card-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .sle-card-header:hover {
+            background-color: rgba(255,255,255,0.05);
+        }
+        
+        .sle-card-header .collapse-icon {
+            transition: transform 0.2s ease;
+        }
+        
+        .sle-card-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .sle-average {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .sle-average.good { color: var(--accent-green); }
+        .sle-average.warning { color: var(--accent-yellow); }
+        .sle-average.poor { color: var(--accent-red); }
         
         .device-table {
             font-size: 0.9rem;
@@ -491,8 +538,11 @@
                     </div>
                     <div class="card-body">
                         <div class="btn-group w-100" role="group" aria-label="SLE Time Range">
+                            <input type="radio" class="btn-check" name="sleTimeRange" id="range5m" value="5m">
+                            <label class="btn btn-outline-primary" for="range5m">5 Min</label>
+                            
                             <input type="radio" class="btn-check" name="sleTimeRange" id="range1h" value="1h">
-                            <label class="btn btn-outline-primary" for="range1h">Last Hour</label>
+                            <label class="btn btn-outline-primary" for="range1h">1 Hour</label>
                             
                             <input type="radio" class="btn-check" name="sleTimeRange" id="rangeToday" value="today">
                             <label class="btn btn-outline-primary" for="rangeToday">Today</label>
@@ -518,43 +568,65 @@
 
         <!-- Health Summary -->
         <div id="healthSection" style="display: none;">
-            <h5 class="mb-3"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
-            <div class="row mb-4">
-                <div class="col-md-4 mb-3">
-                    <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-wifi text-info"></i></div>
-                        <div class="health-count" id="apCount">-</div>
-                        <div class="health-label">Access Points</div>
-                        <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span> Online</span>
-                            <span id="apDivider" class="mx-2">|</span>
-                            <span id="apOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span> Offline</span>
+            <h5 class="mb-2"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
+            <div class="row mb-3">
+                <div class="col-md-4 mb-2">
+                    <a href="#" id="apHealthLink" class="text-decoration-none">
+                        <div class="card health-card health-card-clickable">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="health-icon me-2"><i class="bi bi-wifi text-info"></i></div>
+                                <div>
+                                    <div class="health-count" id="apCount">-</div>
+                                    <div class="health-label">Access Points</div>
+                                </div>
+                            </div>
+                            <div class="health-status">
+                                <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span></span>
+                                <span id="apDivider" class="mx-1">|</span>
+                                <span id="apOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span></span>
+                            </div>
+                            <div class="health-link"><small class="text-secondary"><i class="bi bi-box-arrow-up-right me-1"></i>View Clients</small></div>
                         </div>
-                    </div>
+                    </a>
                 </div>
-                <div class="col-md-4 mb-3">
-                    <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-hdd-stack text-warning"></i></div>
-                        <div class="health-count" id="switchCount">-</div>
-                        <div class="health-label">Switches</div>
-                        <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span> Online</span>
-                            <span id="switchDivider" class="mx-2">|</span>
-                            <span id="switchOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span> Offline</span>
+                <div class="col-md-4 mb-2">
+                    <a href="#" id="switchHealthLink" class="text-decoration-none">
+                        <div class="card health-card health-card-clickable">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="health-icon me-2"><i class="bi bi-hdd-stack text-warning"></i></div>
+                                <div>
+                                    <div class="health-count" id="switchCount">-</div>
+                                    <div class="health-label">Switches</div>
+                                </div>
+                            </div>
+                            <div class="health-status">
+                                <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span></span>
+                                <span id="switchDivider" class="mx-1">|</span>
+                                <span id="switchOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span></span>
+                            </div>
+                            <div class="health-link"><small class="text-secondary"><i class="bi bi-box-arrow-up-right me-1"></i>View Clients</small></div>
                         </div>
-                    </div>
+                    </a>
                 </div>
-                <div class="col-md-4 mb-3">
-                    <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-router text-success"></i></div>
-                        <div class="health-count" id="gatewayCount">-</div>
-                        <div class="health-label">Gateways</div>
-                        <div class="mt-2">
-                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span> Online</span>
-                            <span id="gatewayDivider" class="mx-2">|</span>
-                            <span id="gatewayOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span> Offline</span>
+                <div class="col-md-4 mb-2">
+                    <a href="#" id="gatewayHealthLink" class="text-decoration-none">
+                        <div class="card health-card health-card-clickable">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="health-icon me-2"><i class="bi bi-router text-success"></i></div>
+                                <div>
+                                    <div class="health-count" id="gatewayCount">-</div>
+                                    <div class="health-label">Gateways</div>
+                                </div>
+                            </div>
+                            <div class="health-status">
+                                <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span></span>
+                                <span id="gatewayDivider" class="mx-1">|</span>
+                                <span id="gatewayOfflineSection" class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span></span>
+                            </div>
+                            <div class="health-link"><small class="text-secondary"><i class="bi bi-box-arrow-up-right me-1"></i>View WAN</small></div>
                         </div>
-                    </div>
+                    </a>
+                </div>
                 </div>
             </div>
 
@@ -582,6 +654,7 @@
                                     <tr>
                                         <th>Name</th>
                                         <th>Status</th>
+                                        <th>SSIDs</th>
                                         <th>Clients</th>
                                         <th>Port Speed</th>
                                         <th>Power</th>
@@ -591,7 +664,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="apsTable">
-                                    <tr><td colspan="8" class="text-center text-secondary">No access points found</td></tr>
+                                    <tr><td colspan="9" class="text-center text-secondary">No access points found</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -600,12 +673,17 @@
                 
                 <!-- WiFi SLE -->
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-graph-up me-2"></i>WiFi SLE Metrics</span>
-                        <span class="badge bg-secondary" id="wifiSleAvailable">N/A</span>
+                    <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wifiSleCollapse">
+                        <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>WiFi SLE Metrics</span>
+                        <div class="d-flex align-items-center">
+                            <span class="sle-average me-2" id="wifiSleAverage">-</span>
+                            <span class="badge bg-secondary" id="wifiSleAvailable">N/A</span>
+                        </div>
                     </div>
-                    <div class="card-body" id="wifiSleMetrics">
-                        <div class="text-center text-secondary py-3">No WiFi SLE data available</div>
+                    <div class="collapse" id="wifiSleCollapse">
+                        <div class="card-body" id="wifiSleMetrics">
+                            <div class="text-center text-secondary py-3">No WiFi SLE data available</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -624,8 +702,8 @@
                                     <tr>
                                         <th>Name</th>
                                         <th>Status</th>
+                                        <th>Connected APs</th>
                                         <th>Wired Clients</th>
-                                        <th>APs</th>
                                         <th>Uptime</th>
                                         <th>Serial</th>
                                         <th>Notes</th>
@@ -641,12 +719,17 @@
                 
                 <!-- Wired SLE -->
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-graph-up me-2"></i>Wired SLE Metrics</span>
-                        <span class="badge bg-secondary" id="wiredSleAvailable">N/A</span>
+                    <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wiredSleCollapse">
+                        <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>Wired SLE Metrics</span>
+                        <div class="d-flex align-items-center">
+                            <span class="sle-average me-2" id="wiredSleAverage">-</span>
+                            <span class="badge bg-secondary" id="wiredSleAvailable">N/A</span>
+                        </div>
                     </div>
-                    <div class="card-body" id="wiredSleMetrics">
-                        <div class="text-center text-secondary py-3">No Wired SLE data available</div>
+                    <div class="collapse" id="wiredSleCollapse">
+                        <div class="card-body" id="wiredSleMetrics">
+                            <div class="text-center text-secondary py-3">No Wired SLE data available</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -680,12 +763,17 @@
                 
                 <!-- WAN SLE -->
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-graph-up me-2"></i>WAN SLE Metrics</span>
-                        <span class="badge bg-secondary" id="wanSleAvailable">N/A</span>
+                    <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wanSleCollapse">
+                        <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>WAN SLE Metrics</span>
+                        <div class="d-flex align-items-center">
+                            <span class="sle-average me-2" id="wanSleAverage">-</span>
+                            <span class="badge bg-secondary" id="wanSleAvailable">N/A</span>
+                        </div>
                     </div>
-                    <div class="card-body" id="wanSleMetrics">
-                        <div class="text-center text-secondary py-3">No WAN SLE data available</div>
+                    <div class="collapse" id="wanSleCollapse">
+                        <div class="card-body" id="wanSleMetrics">
+                            <div class="text-center text-secondary py-3">No WAN SLE data available</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -718,6 +806,19 @@
         const emptyState = document.getElementById('emptyState');
         const siteInfo = document.getElementById('siteInfo');
         const sleTimeRange = document.getElementById('sleTimeRange');
+
+        // Handle SLE collapse toggle icon rotation
+        document.querySelectorAll('.sle-card-header').forEach(header => {
+            const collapseTarget = document.querySelector(header.dataset.bsTarget);
+            if (collapseTarget) {
+                collapseTarget.addEventListener('show.bs.collapse', () => {
+                    header.classList.remove('collapsed');
+                });
+                collapseTarget.addEventListener('hide.bs.collapse', () => {
+                    header.classList.add('collapsed');
+                });
+            }
+        });
 
         // Format uptime to human readable
         function formatUptime(seconds) {
@@ -835,7 +936,7 @@
                 const healthPromise = fetch(`/api/sites/${siteId}/health`);
                 
                 loadingDetail.textContent = 'Requesting SLE metrics...';
-                const slePromise = fetch(`/api/sites/${siteId}/sle?duration=${currentDuration}`);
+                const slePromise = fetch(`/api/sites/${siteId}/sle?duration=${getApiDuration(currentDuration)}`);
                 
                 // Wait for both responses
                 loadingDetail.textContent = 'Waiting for API responses...';
@@ -888,7 +989,7 @@
             loadingDetail.textContent = `Fetching data for ${getDurationLabel(currentDuration)}`;
             
             try {
-                const response = await fetch(`/api/sites/${currentSiteId}/sle?duration=${currentDuration}`);
+                const response = await fetch(`/api/sites/${currentSiteId}/sle?duration=${getApiDuration(currentDuration)}`);
                 const sleData = await response.json();
                 
                 if (sleData.success) {
@@ -905,12 +1006,21 @@
         // Get human-readable duration label
         function getDurationLabel(duration) {
             const labels = {
-                '1h': 'Last Hour',
+                '5m': '5 Minutes',
+                '1h': '1 Hour',
                 'today': 'Today',
                 '1d': '24 Hours',
                 '1w': '7 Days'
             };
             return labels[duration] || duration;
+        }
+        
+        // Map UI duration values to API duration values
+        function getApiDuration(duration) {
+            const mapping = {
+                '5m': '15m'  // UI shows 5 min, but API needs 15 min minimum
+            };
+            return mapping[duration] || duration;
         }
 
         // Update health display
@@ -948,14 +1058,19 @@
             const tbody = document.getElementById('apsTable');
             
             if (!devices || devices.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No access points found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-secondary">No access points found</td></tr>';
                 return;
             }
             
-            tbody.innerHTML = devices.map(device => `
+            tbody.innerHTML = devices.map(device => {
+                const ssids = device.ssids && device.ssids.length > 0 
+                    ? device.ssids.map(s => `<span class="badge bg-secondary me-1">${s}</span>`).join('') 
+                    : '<span class="text-secondary">-</span>';
+                return `
                 <tr>
                     <td>${device.name || '-'}</td>
                     <td><span class="status-badge ${device.status}">${device.status}</span></td>
+                    <td>${ssids}</td>
                     <td>${device.num_clients || 0}</td>
                     <td>${device.port_speed ? device.port_speed + ' Mbps' : '-'}</td>
                     <td>${device.power_src || '-'}</td>
@@ -963,7 +1078,7 @@
                     <td><small>${device.serial || '-'}</small></td>
                     <td><small class="text-secondary">${device.notes || '-'}</small></td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
         
         // Update Switches table
@@ -979,8 +1094,8 @@
                 <tr>
                     <td>${device.name || '-'}</td>
                     <td><span class="status-badge ${device.status}">${device.status}</span></td>
-                    <td>${device.num_wired_clients || 0}</td>
                     <td>${device.num_aps || 0}</td>
+                    <td>${device.num_wired_clients || 0}</td>
                     <td>${formatUptime(device.uptime)}</td>
                     <td><small>${device.serial || '-'}</small></td>
                     <td><small class="text-secondary">${device.notes || '-'}</small></td>
@@ -1063,22 +1178,35 @@
         function updateSleCategoryDisplay(category, data, metricNames, metricDescriptions) {
             const container = document.getElementById(`${category}SleMetrics`);
             const badge = document.getElementById(`${category}SleAvailable`);
+            const avgDisplay = document.getElementById(`${category}SleAverage`);
+            const header = document.querySelector(`[data-bs-target="#${category}SleCollapse"]`);
             
             if (!data || !data.available || Object.keys(data.metrics).length === 0) {
                 container.innerHTML = '<div class="text-center text-secondary py-3">No SLE data available for this site</div>';
                 badge.textContent = 'N/A';
                 badge.className = 'badge bg-secondary';
+                if (avgDisplay) {
+                    avgDisplay.textContent = '-';
+                    avgDisplay.className = 'sle-average me-2';
+                }
                 return;
             }
             
             const metrics = data.metrics;
             const metricCount = Object.keys(metrics).length;
             
-            // Calculate average for the badge
+            // Calculate average for the badge and display
             const values = Object.values(metrics);
             const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
-            badge.textContent = Math.round(avgValue) + '%';
+            const avgRounded = Math.round(avgValue);
+            badge.textContent = metricCount + ' metrics';
             badge.className = `badge ${getBadgeClass(avgValue)}`;
+            
+            // Update the average display
+            if (avgDisplay) {
+                avgDisplay.textContent = avgRounded + '%';
+                avgDisplay.className = `sle-average me-2 ${getValueColorClass(avgValue)}`;
+            }
             
             // Build the metrics HTML
             let html = '<div class="row">';
@@ -1149,6 +1277,12 @@
                 const selectedOption = this.options[this.selectedIndex];
                 document.getElementById('siteName').textContent = selectedOption.textContent;
                 document.getElementById('siteAddress').textContent = selectedOption.dataset.address || 'No address';
+                
+                // Update health card links
+                document.getElementById('apHealthLink').href = `/ap-clients/${siteId}`;
+                document.getElementById('switchHealthLink').href = `/switch-clients/${siteId}`;
+                document.getElementById('gatewayHealthLink').href = `/gateway-wan/${siteId}`;
+                
                 loadSiteHealth(siteId);
             } else {
                 currentSiteId = null;
@@ -1159,9 +1293,37 @@
             }
         });
 
+        // Check for site ID in URL query parameters
+        function getUrlParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // Auto-select site from URL parameter
+        async function autoSelectSiteFromUrl() {
+            const siteIdFromUrl = getUrlParam('site');
+            if (siteIdFromUrl && sites.length > 0) {
+                // Find and select the site in the dropdown
+                const siteExists = sites.some(site => site.id === siteIdFromUrl);
+                if (siteExists) {
+                    siteSelector.value = siteIdFromUrl;
+                    // Trigger change event to load site data
+                    siteSelector.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+
         // Auto-test connection on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            testConnection();
+        document.addEventListener('DOMContentLoaded', async function() {
+            await testConnection();
+            
+            // Check if we have a site parameter in URL
+            const siteIdFromUrl = getUrlParam('site');
+            if (siteIdFromUrl) {
+                // Auto-load sites and select the one from URL
+                await loadSites();
+                await autoSelectSiteFromUrl();
+            }
         });
     </script>
 </body>

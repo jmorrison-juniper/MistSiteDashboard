@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateway WAN Status - Mist Site Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --tm-magenta: #E20074;
+            --tm-magenta-dark: #B8005D;
+            --tm-magenta-light: #FF3399;
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2D2D2D;
+            --bg-card: #3D3D3D;
+            --bg-card-header: #4A4A4A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --accent-green: #00C853;
+            --accent-red: #FF5252;
+            --accent-yellow: #FFD600;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important;
+            border-bottom: none;
+            box-shadow: 0 2px 10px rgba(226, 0, 116, 0.3);
+        }
+        
+        .navbar-brand {
+            color: var(--text-primary) !important;
+            font-weight: 700;
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header {
+            background-color: var(--bg-card-header);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .table-dark {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-border-color: rgba(255,255,255,0.1);
+        }
+        
+        .table-dark thead th {
+            background-color: var(--bg-card-header);
+            color: var(--text-primary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--tm-magenta-light) 0%, var(--tm-magenta) 100%);
+        }
+        
+        .badge.bg-success { background: linear-gradient(135deg, var(--accent-green) 0%, #00A846 100%) !important; }
+        .badge.bg-warning { background: linear-gradient(135deg, var(--accent-yellow) 0%, #E6C200 100%) !important; color: #1A1A1A !important; }
+        .badge.bg-danger { background: linear-gradient(135deg, var(--accent-red) 0%, #E64545 100%) !important; }
+        .badge.bg-info { background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important; }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        .gateway-card {
+            margin-bottom: 1.5rem;
+        }
+        
+        .gateway-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .gateway-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        
+        .status-indicator.up {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+        
+        .status-indicator.down {
+            background-color: var(--accent-red);
+            box-shadow: 0 0 8px var(--accent-red);
+        }
+        
+        .wan-port-card {
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .wan-port-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        
+        .wan-port-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        
+        .stat-value {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+        
+        .stat-value code {
+            font-size: 0.9rem;
+            color: var(--tm-magenta-light);
+            background-color: rgba(0,0,0,0.3);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+        
+        .traffic-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .traffic-stat {
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 0.5rem;
+            text-align: center;
+        }
+        
+        .traffic-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .traffic-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .service-path-card {
+            background-color: rgba(226, 0, 116, 0.1);
+            border: 1px solid rgba(226, 0, 116, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .service-path-title {
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--tm-magenta-light);
+        }
+        
+        .path-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .path-metric {
+            text-align: center;
+            padding: 0.5rem;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        
+        .path-metric-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .path-metric-value {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .path-metric-value.good { color: var(--accent-green); }
+        .path-metric-value.warning { color: var(--accent-yellow); }
+        .path-metric-value.poor { color: var(--accent-red); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/?site={{ site_id }}">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+            <span class="navbar-text text-white">
+                <i class="bi bi-router me-2"></i>Gateway WAN Status
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4><i class="bi bi-globe me-2"></i>WAN Port Status & Configuration</h4>
+            <button id="refreshBtn" class="btn btn-primary">
+                <span class="loading-spinner spinner-border spinner-border-sm me-1"></span>
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+        </div>
+        
+        <div id="loadingMessage" class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <p class="text-secondary">Loading gateway WAN data...</p>
+        </div>
+        
+        <div id="gatewaysContainer" style="display: none;">
+        </div>
+        
+        <div id="emptyMessage" style="display: none;" class="text-center py-5">
+            <i class="bi bi-router" style="font-size: 4rem; color: var(--tm-magenta); opacity: 0.5;"></i>
+            <p class="text-secondary mt-3">No gateways found at this site</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const siteId = '{{ site_id }}';
+        
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function formatUptime(seconds) {
+            if (!seconds || seconds === 0) return '-';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+        
+        function getMetricClass(metric, value) {
+            if (metric === 'latency') {
+                if (value < 50) return 'good';
+                if (value < 100) return 'warning';
+                return 'poor';
+            }
+            if (metric === 'jitter') {
+                if (value < 10) return 'good';
+                if (value < 30) return 'warning';
+                return 'poor';
+            }
+            if (metric === 'loss') {
+                if (value < 1) return 'good';
+                if (value < 5) return 'warning';
+                return 'poor';
+            }
+            if (metric === 'mos') {
+                if (value >= 4) return 'good';
+                if (value >= 3) return 'warning';
+                return 'poor';
+            }
+            return '';
+        }
+        
+        function renderGateway(gw) {
+            const statusClass = gw.status === 'connected' ? 'up' : 'down';
+            const statusBadge = gw.status === 'connected' ? 'success' : 'danger';
+            
+            let wanPortsHtml = '';
+            if (gw.wan_ports && gw.wan_ports.length > 0) {
+                wanPortsHtml = gw.wan_ports.map(port => `
+                    <div class="wan-port-card">
+                        <div class="wan-port-header">
+                            <span class="wan-port-name">
+                                <span class="status-indicator ${port.status}"></span>
+                                ${port.wan_name || port.name}
+                            </span>
+                            <span class="badge bg-${port.status === 'up' ? 'success' : 'danger'}">${port.status.toUpperCase()}</span>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="stat-row">
+                                    <span class="stat-label">IP Address</span>
+                                    <span class="stat-value">${port.ip || '-'}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Interface</span>
+                                    <span class="stat-value"><code>${port.name || '-'}</code></span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Address Mode</span>
+                                    <span class="stat-value">${port.address_mode || '-'}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-row">
+                                    <span class="stat-label">WAN Type</span>
+                                    <span class="stat-value">${port.wan_type || '-'}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">VLAN</span>
+                                    <span class="stat-value">${port.vlan || '-'}</span>
+                                </div>
+                                <div class="stat-row">
+                                    <span class="stat-label">Port ID</span>
+                                    <span class="stat-value">${port.port_id || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                wanPortsHtml = '<p class="text-secondary text-center py-3">No WAN port data available</p>';
+            }
+            
+            let servicePathsHtml = '';
+            
+            // Render VPN Peers section
+            let vpnPeersHtml = '';
+            if (gw.vpn_peers && gw.vpn_peers.length > 0) {
+                vpnPeersHtml = `
+                    <div class="service-path-card mt-4">
+                        <div class="service-path-title"><i class="bi bi-shield-lock me-2"></i>VPN Peers</div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>VPN Name</th>
+                                        <th>WAN</th>
+                                        <th>Peer Router</th>
+                                        <th>Latency</th>
+                                        <th>Jitter</th>
+                                        <th>Loss</th>
+                                        <th>MOS</th>
+                                        <th>Uptime</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${gw.vpn_peers.map(vpn => `
+                                        <tr>
+                                            <td><span class="badge bg-${vpn.up ? 'success' : 'danger'}">${vpn.up ? 'UP' : 'DOWN'}</span></td>
+                                            <td><small>${vpn.vpn_name || '-'}</small></td>
+                                            <td><small>${vpn.wan_name || '-'}</small></td>
+                                            <td>${vpn.peer_router_name || '-'}</td>
+                                            <td class="${getMetricClass('latency', vpn.latency)}">${vpn.latency ? vpn.latency.toFixed(1) + 'ms' : '-'}</td>
+                                            <td class="${getMetricClass('jitter', vpn.jitter)}">${vpn.jitter ? vpn.jitter.toFixed(1) + 'ms' : '-'}</td>
+                                            <td class="${getMetricClass('loss', vpn.loss)}">${vpn.loss ? vpn.loss.toFixed(2) + '%' : '0%'}</td>
+                                            <td class="${getMetricClass('mos', vpn.mos / 100)}">${vpn.mos ? (vpn.mos / 100).toFixed(2) : '-'}</td>
+                                            <td><small>${formatUptime(vpn.uptime)}</small></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Render BGP Peers section
+            let bgpPeersHtml = '';
+            if (gw.bgp_peers && gw.bgp_peers.length > 0) {
+                bgpPeersHtml = `
+                    <div class="service-path-card mt-4">
+                        <div class="service-path-title"><i class="bi bi-diagram-2 me-2"></i>BGP Peers</div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Neighbor</th>
+                                        <th>VRF</th>
+                                        <th>Local AS</th>
+                                        <th>Neighbor AS</th>
+                                        <th>State</th>
+                                        <th>RX Routes</th>
+                                        <th>TX Routes</th>
+                                        <th>Uptime</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${gw.bgp_peers.map(bgp => `
+                                        <tr>
+                                            <td><span class="badge bg-${bgp.up ? 'success' : 'danger'}">${bgp.up ? 'UP' : 'DOWN'}</span></td>
+                                            <td><code>${bgp.neighbor || '-'}</code></td>
+                                            <td>${bgp.vrf_name || 'default'}</td>
+                                            <td>${bgp.local_as || '-'}</td>
+                                            <td>${bgp.neighbor_as || '-'}</td>
+                                            <td><span class="badge bg-${bgp.state === 'established' ? 'success' : 'warning'}">${bgp.state || '-'}</span></td>
+                                            <td>${bgp.rx_routes || 0}</td>
+                                            <td>${bgp.tx_routes || 0}</td>
+                                            <td><small>${formatUptime(bgp.uptime)}</small></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (gw.service_paths && gw.service_paths.length > 0) {
+                servicePathsHtml = `
+                    <div class="service-path-card">
+                        <div class="service-path-title"><i class="bi bi-diagram-3 me-2"></i>Service Path Stats</div>
+                        ${gw.service_paths.map(path => `
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold">${path.name}</span>
+                                    <small class="text-secondary">${path.peer_type ? path.peer_type + ': ' : ''}${path.peer_name || ''}</small>
+                                </div>
+                                <div class="path-metrics">
+                                    <div class="path-metric">
+                                        <div class="path-metric-label">Latency</div>
+                                        <div class="path-metric-value ${getMetricClass('latency', path.latency)}">${path.latency ? path.latency.toFixed(1) + 'ms' : '-'}</div>
+                                    </div>
+                                    <div class="path-metric">
+                                        <div class="path-metric-label">Jitter</div>
+                                        <div class="path-metric-value ${getMetricClass('jitter', path.jitter)}">${path.jitter ? path.jitter.toFixed(1) + 'ms' : '-'}</div>
+                                    </div>
+                                    <div class="path-metric">
+                                        <div class="path-metric-label">Loss</div>
+                                        <div class="path-metric-value ${getMetricClass('loss', path.loss)}">${path.loss ? path.loss.toFixed(2) + '%' : '-'}</div>
+                                    </div>
+                                    <div class="path-metric">
+                                        <div class="path-metric-label">MOS</div>
+                                        <div class="path-metric-value ${getMetricClass('mos', path.mos)}">${path.mos ? path.mos.toFixed(2) : '-'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="card gateway-card">
+                    <div class="card-header gateway-header">
+                        <div class="gateway-name">
+                            <span class="status-indicator ${statusClass}"></span>
+                            ${gw.name}
+                        </div>
+                        <div>
+                            <span class="badge bg-${statusBadge} me-2">${gw.status}</span>
+                            <small class="text-secondary">Uptime: ${formatUptime(gw.uptime)}</small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <small class="text-secondary">Model:</small> ${gw.model || '-'}
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-secondary">Serial:</small> <code>${gw.serial || '-'}</code>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-secondary">Version:</small> ${gw.version || '-'}
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-secondary">External IP:</small> ${gw.ext_ip || '-'}
+                            </div>
+                        </div>
+                        <h6 class="mt-4 mb-3"><i class="bi bi-ethernet me-2"></i>WAN Ports</h6>
+                        ${wanPortsHtml}
+                        ${vpnPeersHtml}
+                        ${bgpPeersHtml}
+                        ${servicePathsHtml}
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function loadData() {
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('gatewaysContainer').style.display = 'none';
+            document.getElementById('emptyMessage').style.display = 'none';
+            document.getElementById('refreshBtn').classList.add('loading');
+            
+            try {
+                const response = await fetch(`/api/sites/${siteId}/gateway-wan`);
+                const data = await response.json();
+                
+                if (data.success && data.gateways && data.gateways.length > 0) {
+                    const container = document.getElementById('gatewaysContainer');
+                    container.innerHTML = data.gateways.map(renderGateway).join('');
+                    
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('gatewaysContainer').style.display = 'block';
+                } else {
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('emptyMessage').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loadingMessage').innerHTML = `
+                    <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <p class="text-danger mt-3">Error loading data: ${error.message}</p>
+                `;
+            } finally {
+                document.getElementById('refreshBtn').classList.remove('loading');
+            }
+        }
+        
+        document.getElementById('refreshBtn').addEventListener('click', loadData);
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ Author: Joseph Morrison <jmorrison@juniper.net>
 """
 
 import os
+import time
 import logging
 from typing import Dict, List, Optional, Any
 
@@ -33,7 +34,7 @@ class MistConnection:
         if self.session is None:
             self.session = mistapi.APISession(
                 host=self.api_host,
-                apitoken=self.api_token
+                apitoken=self.api_token or ""
             )
         return self.session
     
@@ -46,16 +47,19 @@ class MistConnection:
             if self.org_id:
                 response = mistapi.api.v1.orgs.orgs.getOrg(session, self.org_id)
                 org_data = response.data if hasattr(response, "data") else response
-                return {
-                    "success": True,
-                    "org_name": org_data.get("name", "Unknown"),
-                    "org_id": self.org_id
-                }
+                if isinstance(org_data, dict):
+                    return {
+                        "success": True,
+                        "org_name": org_data.get("name", "Unknown"),
+                        "org_id": self.org_id
+                    }
+                else:
+                    return {"success": True, "org_name": "Unknown", "org_id": self.org_id}
             else:
                 # List orgs to find the first available
                 response = mistapi.api.v1.self.self.getSelf(session)
                 self_data = response.data if hasattr(response, "data") else response
-                privileges = self_data.get("privileges", [])
+                privileges = self_data.get("privileges", []) if isinstance(self_data, dict) else []
                 
                 if privileges:
                     first_org = privileges[0]
@@ -82,9 +86,12 @@ class MistConnection:
                 if not test_result["success"]:
                     raise ValueError("Could not determine organization ID")
             
+            # org_id is guaranteed to be set after test_connection succeeds
+            org_id: str = self.org_id or ""
+            
             response = mistapi.api.v1.orgs.sites.listOrgSites(
                 session, 
-                self.org_id, 
+                org_id, 
                 limit=1000
             )
             sites = mistapi.get_all(response=response, mist_session=session) or []
@@ -112,6 +119,58 @@ class MistConnection:
         """Get device health statistics for a site."""
         try:
             session = self._get_session()
+            org_id: str = self.org_id or ""
+            
+            # Build device profile -> SSIDs mapping
+            # Chain: AP.deviceprofile_id -> Template.deviceprofile_ids -> WLAN.template_id
+            deviceprofile_ssids: Dict[str, List[str]] = {}
+            try:
+                # Fetch org templates
+                templates_response = mistapi.api.v1.orgs.templates.listOrgTemplates(
+                    session, org_id
+                )
+                templates_data = templates_response.data if hasattr(templates_response, "data") else templates_response
+                templates = templates_data if isinstance(templates_data, list) else []
+                
+                # Build template_id -> deviceprofile_ids mapping
+                template_to_deviceprofiles: Dict[str, List[str]] = {}
+                for template in templates:
+                    if isinstance(template, dict):
+                        template_id = template.get("id", "")
+                        dp_ids = template.get("deviceprofile_ids", [])
+                        filter_by_dp = template.get("filter_by_deviceprofile", False)
+                        if template_id and dp_ids and filter_by_dp:
+                            template_to_deviceprofiles[template_id] = dp_ids
+                
+                # Fetch org WLANs
+                wlans_response = mistapi.api.v1.orgs.wlans.listOrgWlans(
+                    session, org_id
+                )
+                wlans_data = wlans_response.data if hasattr(wlans_response, "data") else wlans_response
+                org_wlans = wlans_data if isinstance(wlans_data, list) else []
+                
+                # Build deviceprofile_id -> SSIDs mapping
+                for wlan in org_wlans:
+                    if not isinstance(wlan, dict):
+                        continue
+                    if not wlan.get("enabled", True):
+                        continue
+                    ssid = wlan.get("ssid", "")
+                    template_id = wlan.get("template_id", "")
+                    if not ssid:
+                        continue
+                    
+                    # If WLAN has a template_id, map it to device profiles via template
+                    if template_id and template_id in template_to_deviceprofiles:
+                        for dp_id in template_to_deviceprofiles[template_id]:
+                            if dp_id not in deviceprofile_ssids:
+                                deviceprofile_ssids[dp_id] = []
+                            if ssid not in deviceprofile_ssids[dp_id]:
+                                deviceprofile_ssids[dp_id].append(ssid)
+                
+                logger.debug(f"Built SSID mapping for {len(deviceprofile_ssids)} device profiles")
+            except Exception as mapping_error:
+                logger.warning(f"Could not build device profile SSID mapping: {mapping_error}")
             
             # Get device stats for all device types
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
@@ -161,6 +220,12 @@ class MistConnection:
                     eth0_stat = port_stat.get("eth0", {})
                     device_summary["port_speed"] = eth0_stat.get("speed", 0)
                     
+                    # Get SSIDs for this AP based on its device profile
+                    # Uses the deviceprofile_id -> SSIDs mapping built from templates
+                    ap_deviceprofile_id = device.get("deviceprofile_id", "")
+                    ap_ssids: List[str] = deviceprofile_ssids.get(ap_deviceprofile_id, [])
+                    device_summary["ssids"] = ap_ssids.copy() if ap_ssids else []
+                    
                     health_data["aps"]["total"] += 1
                     health_data["aps"]["connected" if is_connected else "disconnected"] += 1
                     health_data["aps"]["devices"].append(device_summary)
@@ -168,6 +233,7 @@ class MistConnection:
                     # Switch-specific fields
                     clients_stats = device.get("clients_stats", {}).get("total", {})
                     device_summary["num_wired_clients"] = clients_stats.get("num_wired_clients", 0) or 0
+                    device_summary["num_wifi_clients"] = clients_stats.get("num_wifi_clients", 0) or 0
                     # num_aps comes as a list, get the first value
                     num_aps = clients_stats.get("num_aps", [0])
                     device_summary["num_aps"] = num_aps[0] if isinstance(num_aps, list) and num_aps else 0
@@ -201,20 +267,33 @@ class MistConnection:
         
         Args:
             site_id: The site ID to get SLE metrics for
-            duration: Time range - '1h', 'today', '1d', '1w' (default: '1d')
+            duration: Time range - '10m', '1h', 'today', '1d', '1w' (default: '1d')
         """
         try:
             session = self._get_session()
             
-            # Map duration values to API-compatible formats
-            # Note: 'today' will be handled specially with start/end timestamps
-            duration_map = {
-                '1h': '1h',
-                'today': '1d',  # Will be overridden with timestamps
-                '1d': '1d',
-                '1w': '1w'
-            }
-            api_duration = duration_map.get(duration, '1d')
+            # Determine if we need to use start/end timestamps or duration parameter
+            # The API supports duration values like '1h', '1d', '1w' but for 10 minutes
+            # we need to use explicit start/end epoch timestamps
+            use_timestamps = duration == '10m'
+            
+            start_time: int = 0
+            end_time: int = 0
+            api_duration: str = '1d'
+            
+            if use_timestamps:
+                # Calculate start/end epoch timestamps for 10 minutes
+                end_time = int(time.time())
+                start_time = end_time - 600  # 10 minutes = 600 seconds
+            else:
+                # Map duration values to API-compatible formats
+                duration_map = {
+                    '1h': '1h',
+                    'today': '1d',
+                    '1d': '1d',
+                    '1w': '1w'
+                }
+                api_duration = duration_map.get(duration, '1d')
             
             sle_data = {
                 "wifi": {"metrics": {}, "available": False},
@@ -238,7 +317,7 @@ class MistConnection:
                     scope_id=site_id
                 )
                 metrics_data = metrics_response.data if hasattr(metrics_response, "data") else metrics_response
-                enabled_metrics = metrics_data.get("enabled", []) if metrics_data else []
+                enabled_metrics = metrics_data.get("enabled", []) if isinstance(metrics_data, dict) else []
             except Exception as e:
                 logger.debug(f"Could not get enabled metrics for site {site_id}: {e}")
                 enabled_metrics = []
@@ -256,17 +335,29 @@ class MistConnection:
                     continue
                     
                 try:
-                    summary_response = mistapi.api.v1.sites.sle.getSiteSleSummary(
-                        session,
-                        site_id,
-                        scope="site",
-                        scope_id=site_id,
-                        metric=metric,
-                        duration=api_duration
-                    )
+                    # Use start/end timestamps for 10m, otherwise use duration parameter
+                    if use_timestamps:
+                        summary_response = mistapi.api.v1.sites.sle.getSiteSleSummary(
+                            session,
+                            site_id,
+                            scope="site",
+                            scope_id=site_id,
+                            metric=metric,
+                            start=start_time,
+                            end=end_time
+                        )
+                    else:
+                        summary_response = mistapi.api.v1.sites.sle.getSiteSleSummary(
+                            session,
+                            site_id,
+                            scope="site",
+                            scope_id=site_id,
+                            metric=metric,
+                            duration=api_duration
+                        )
                     summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
                     
-                    if summary_data and "sle" in summary_data:
+                    if isinstance(summary_data, dict) and "sle" in summary_data:
                         # Calculate SLE percentage from samples
                         sle_info = summary_data.get("sle", {})
                         samples = sle_info.get("samples", {})
@@ -288,6 +379,7 @@ class MistConnection:
                             
                 except Exception as metric_error:
                     logger.debug(f"Could not fetch {metric} for site {site_id}: {metric_error}")
+            
             
             return sle_data
             
@@ -329,4 +421,368 @@ class MistConnection:
             
         except Exception as error:
             logger.error(f"Error fetching devices for site {site_id}: {error}")
+            raise
+
+    def get_wireless_client_sessions(self, site_id: str) -> List[Dict[str, Any]]:
+        """Get wireless client data combining sessions, client stats, and client search.
+        
+        This provides the most complete view of wireless clients by merging data from:
+        - searchSiteWirelessClientSessions (historical sessions)
+        - listSiteWirelessClientsStats (current connected clients with detailed stats)
+        - searchSiteWirelessClients (client search with hostname, username, etc.)
+        """
+        try:
+            session = self._get_session()
+            clients_by_mac = {}
+            
+            # 1. Get current connected clients with stats (real-time data)
+            try:
+                stats_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+                    session, 
+                    site_id
+                )
+                stats_results = mistapi.get_all(response=stats_response, mist_session=session) or []
+                
+                for client in stats_results:
+                    mac = client.get("mac", "")
+                    if mac:
+                        clients_by_mac[mac] = {
+                            "mac": mac,
+                            "hostname": client.get("hostname", ""),
+                            "ip": client.get("ip", ""),
+                            "username": client.get("username", ""),
+                            "ssid": client.get("ssid", ""),
+                            "ap": client.get("ap_mac", ""),
+                            "band": client.get("band", ""),
+                            "os": client.get("os", ""),
+                            "manufacture": client.get("manufacture", ""),
+                            "last_seen": client.get("last_seen", 0),
+                            "assoc_time": client.get("assoc_time", 0),
+                            "uptime": client.get("uptime", 0),
+                            "rssi": client.get("rssi", 0),
+                            "is_connected": True
+                        }
+            except Exception as e:
+                logger.debug(f"Could not fetch wireless client stats: {e}")
+            
+            # 2. Get client search data (has hostname, username, last values)
+            try:
+                search_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
+                    session, 
+                    site_id,
+                    limit=1000
+                )
+                search_results = mistapi.get_all(response=search_response, mist_session=session) or []
+                
+                for client in search_results:
+                    mac = client.get("mac", "")
+                    if mac:
+                        if mac in clients_by_mac:
+                            # Merge with existing data, prefer non-empty values
+                            existing = clients_by_mac[mac]
+                            existing["hostname"] = existing.get("hostname") or client.get("last_hostname", "")
+                            existing["ip"] = existing.get("ip") or client.get("last_ip", "")
+                            existing["username"] = existing.get("username") or client.get("last_username", "")
+                            existing["os"] = existing.get("os") or client.get("last_os", "")
+                            existing["ssid"] = existing.get("ssid") or client.get("last_ssid", "")
+                        else:
+                            clients_by_mac[mac] = {
+                                "mac": mac,
+                                "hostname": client.get("last_hostname", ""),
+                                "ip": client.get("last_ip", ""),
+                                "username": client.get("last_username", ""),
+                                "ssid": client.get("last_ssid", ""),
+                                "ap": client.get("last_ap", ""),
+                                "band": client.get("band", ""),
+                                "os": client.get("last_os", ""),
+                                "manufacture": client.get("mfg", ""),
+                                "last_seen": client.get("timestamp", 0),
+                                "assoc_time": 0,
+                                "uptime": 0,
+                                "rssi": 0,
+                                "is_connected": False
+                            }
+            except Exception as e:
+                logger.debug(f"Could not fetch wireless client search: {e}")
+            
+            # 3. Get session history for the last 7 days (for disconnect times and historical sessions)
+            try:
+                sessions_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(
+                    session, 
+                    site_id,
+                    duration="7d",
+                    limit=1000
+                )
+                sessions_results = mistapi.get_all(response=sessions_response, mist_session=session) or []
+                
+                for sess in sessions_results:
+                    mac = sess.get("mac", "")
+                    if mac:
+                        if mac in clients_by_mac:
+                            # Update with session data if more recent or has more info
+                            existing = clients_by_mac[mac]
+                            disconnect = sess.get("disconnect", 0)
+                            if disconnect > existing.get("last_seen", 0):
+                                existing["last_seen"] = disconnect
+                            existing["connect"] = existing.get("connect") or sess.get("connect", 0)
+                            existing["disconnect"] = sess.get("disconnect", 0)
+                            existing["duration"] = sess.get("duration", 0)
+                            existing["ssid"] = existing.get("ssid") or sess.get("ssid", "")
+                            existing["manufacture"] = existing.get("manufacture") or sess.get("client_manufacture", "")
+                        else:
+                            clients_by_mac[mac] = {
+                                "mac": mac,
+                                "hostname": "",
+                                "ip": "",
+                                "username": "",
+                                "ssid": sess.get("ssid", ""),
+                                "ap": sess.get("ap", ""),
+                                "band": sess.get("band", ""),
+                                "os": "",
+                                "manufacture": sess.get("client_manufacture", ""),
+                                "last_seen": sess.get("disconnect", 0),
+                                "connect": sess.get("connect", 0),
+                                "disconnect": sess.get("disconnect", 0),
+                                "duration": sess.get("duration", 0),
+                                "assoc_time": 0,
+                                "uptime": 0,
+                                "rssi": 0,
+                                "is_connected": False
+                            }
+            except Exception as e:
+                logger.debug(f"Could not fetch wireless client sessions: {e}")
+            
+            return list(clients_by_mac.values())
+            
+        except Exception as error:
+            logger.error(f"Error fetching wireless clients for site {site_id}: {error}")
+            raise
+
+    def get_wired_clients(self, site_id: str) -> List[Dict[str, Any]]:
+        """Get wired client information combining search and stats.
+        
+        Uses searchSiteWiredClients for client data including DHCP info.
+        """
+        try:
+            session = self._get_session()
+            clients_by_mac = {}
+            current_time = int(time.time())
+            
+            # Get wired clients from search API
+            try:
+                response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(
+                    session, 
+                    site_id,
+                    duration="7d",
+                    limit=1000
+                )
+                all_results = mistapi.get_all(response=response, mist_session=session) or []
+                
+                for client in all_results:
+                    mac = client.get("mac", "")
+                    if mac:
+                        # Get IP from device_mac_port if available
+                        device_mac_port = client.get("device_mac_port", [])
+                        ip_list = client.get("ip", [])
+                        port_info = {}
+                        
+                        if device_mac_port and isinstance(device_mac_port, list) and len(device_mac_port) > 0:
+                            port_info = device_mac_port[0] if isinstance(device_mac_port[0], dict) else {}
+                        
+                        # Get the best IP available
+                        ip = ""
+                        if isinstance(ip_list, list) and ip_list:
+                            ip = ip_list[0]
+                        elif isinstance(ip_list, str):
+                            ip = ip_list
+                        elif port_info.get("ip"):
+                            ip = port_info.get("ip", "")
+                        
+                        # Get timestamps for connected time and last seen
+                        timestamp = client.get("timestamp", 0)
+                        port_start = port_info.get("start", 0)
+                        
+                        # Ensure timestamps are valid integers
+                        if isinstance(timestamp, str):
+                            try:
+                                timestamp = int(float(timestamp)) if timestamp else 0
+                            except (ValueError, TypeError):
+                                timestamp = 0
+                        if isinstance(port_start, str):
+                            try:
+                                port_start = int(float(port_start)) if port_start else 0
+                            except (ValueError, TypeError):
+                                port_start = 0
+                        
+                        # Determine connection status - if seen within last 5 minutes, consider connected
+                        last_seen = timestamp if timestamp else port_start
+                        is_connected = (current_time - last_seen) < 300 if last_seen else False
+                        
+                        # Only use connected_time if it's a valid positive timestamp
+                        connected_time = port_start if port_start > 0 else (timestamp if timestamp > 0 else 0)
+                        
+                        clients_by_mac[mac] = {
+                            "mac": mac,
+                            "hostname": client.get("dhcp_hostname", "") or client.get("dhcp_fqdn", ""),
+                            "ip": ip,
+                            "username": client.get("username", ""),
+                            "connected_time": connected_time,
+                            "last_seen": last_seen,
+                            "device_type": client.get("dhcp_vendor_class_identifier", "") or client.get("dhcp_fingerprint", ""),
+                            "is_connected": is_connected,
+                            "switch_mac": port_info.get("device_mac", "") or (client.get("device_mac", [""])[0] if client.get("device_mac") else ""),
+                            "port_id": port_info.get("port_id", "")
+                        }
+            except Exception as e:
+                logger.debug(f"Could not fetch wired clients: {e}")
+            
+            return list(clients_by_mac.values())
+            
+        except Exception as error:
+            logger.error(f"Error fetching wired clients for site {site_id}: {error}")
+            raise
+
+    def get_gateway_wan_status(self, site_id: str) -> List[Dict[str, Any]]:
+        """Get gateway device stats including WAN port information, VPN peers, and BGP peers."""
+        try:
+            session = self._get_session()
+            
+            if not self.org_id:
+                test_result = self.test_connection()
+                if not test_result["success"]:
+                    raise ValueError("Could not determine organization ID")
+            
+            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                session, 
+                site_id, 
+                type="gateway", 
+                limit=100
+            )
+            gateways = mistapi.get_all(response=response, mist_session=session) or []
+            
+            # Get org_id for VPN/BGP queries (guaranteed set after test_connection)
+            org_id: str = self.org_id or ""
+            
+            gateway_list = []
+            for gw in gateways:
+                gw_mac = gw.get("mac", "")
+                
+                gw_info = {
+                    "id": gw.get("id"),
+                    "name": gw.get("name", "Unknown"),
+                    "mac": gw_mac,
+                    "model": gw.get("model", ""),
+                    "status": gw.get("status", "unknown"),
+                    "serial": gw.get("serial", ""),
+                    "version": gw.get("version", ""),
+                    "uptime": gw.get("uptime", 0),
+                    "ext_ip": gw.get("ext_ip", ""),
+                    "wan_ports": [],
+                    "vpn_peers": [],
+                    "bgp_peers": []
+                }
+                
+                # Extract WAN port information from if_stat
+                # Only include ports where port_usage == "wan" or wan_type is set
+                if_stat = gw.get("if_stat", {})
+                
+                for port_name, port_stats in if_stat.items():
+                    if isinstance(port_stats, dict):
+                        port_usage = port_stats.get("port_usage", "")
+                        wan_type = port_stats.get("wan_type", "")
+                        
+                        # Only include WAN ports
+                        if port_usage == "wan" or wan_type:
+                            # Get IP from ips array
+                            ips = port_stats.get("ips", [])
+                            ip_str = ips[0] if isinstance(ips, list) and ips else ""
+                            
+                            wan_port = {
+                                "name": port_name,
+                                "wan_name": port_stats.get("wan_name", port_name),
+                                "status": "up" if port_stats.get("up", False) else "down",
+                                "ip": ip_str,
+                                "wan_type": wan_type or "ethernet",
+                                "address_mode": port_stats.get("address_mode", ""),
+                                "vlan": port_stats.get("vlan", 0),
+                                "port_id": port_stats.get("port_id", ""),
+                                "rx_bytes": port_stats.get("rx_bytes", 0),
+                                "tx_bytes": port_stats.get("tx_bytes", 0),
+                                "rx_pkts": port_stats.get("rx_pkts", 0),
+                                "tx_pkts": port_stats.get("tx_pkts", 0)
+                            }
+                            gw_info["wan_ports"].append(wan_port)
+                
+                # Fetch VPN peers for this gateway using peer path stats
+                try:
+                    vpn_response = mistapi.api.v1.orgs.stats.searchOrgPeerPathStats(
+                        session,
+                        org_id,
+                        site_id=site_id,
+                        mac=gw_mac,
+                        limit=100
+                    )
+                    if vpn_response and hasattr(vpn_response, 'data'):
+                        vpn_data = vpn_response.data
+                        vpn_results = vpn_data.get("results", []) if isinstance(vpn_data, dict) else []
+                        for vpn in vpn_results:
+                            vpn_peer = {
+                                "vpn_name": vpn.get("vpn_name", ""),
+                                "vpn_role": vpn.get("vpn_role", ""),
+                                "type": vpn.get("type", ""),
+                                "wan_name": vpn.get("wan_name", ""),
+                                "peer_router_name": vpn.get("peer_router_name", ""),
+                                "peer_mac": vpn.get("peer_mac", ""),
+                                "up": vpn.get("up", False),
+                                "is_active": vpn.get("is_active", False),
+                                "uptime": vpn.get("uptime", 0),
+                                "latency": vpn.get("latency", 0),
+                                "jitter": vpn.get("jitter", 0),
+                                "loss": vpn.get("loss", 0),
+                                "mos": vpn.get("mos", 0),
+                                "mtu": vpn.get("mtu", 0),
+                                "hop_count": vpn.get("hop_count", 0)
+                            }
+                            gw_info["vpn_peers"].append(vpn_peer)
+                except Exception as e:
+                    logger.debug(f"Could not fetch VPN peers for gateway {gw_mac}: {e}")
+                
+                # Fetch BGP peers for this gateway
+                try:
+                    bgp_response = mistapi.api.v1.orgs.stats.searchOrgBgpStats(
+                        session,
+                        org_id,
+                        site_id=site_id,
+                        mac=gw_mac,
+                        limit=100
+                    )
+                    if bgp_response and hasattr(bgp_response, 'data'):
+                        bgp_data = bgp_response.data
+                        bgp_results = bgp_data.get("results", []) if isinstance(bgp_data, dict) else []
+                        for bgp in bgp_results:
+                            bgp_peer = {
+                                "neighbor": bgp.get("neighbor", ""),
+                                "neighbor_mac": bgp.get("neighbor_mac", ""),
+                                "vrf_name": bgp.get("vrf_name", ""),
+                                "local_as": bgp.get("local_as", 0),
+                                "neighbor_as": bgp.get("neighbor_as", 0),
+                                "state": bgp.get("state", ""),
+                                "up": bgp.get("up", False),
+                                "uptime": bgp.get("uptime", 0),
+                                "rx_pkts": bgp.get("rx_pkts", 0),
+                                "tx_pkts": bgp.get("tx_pkts", 0),
+                                "rx_routes": bgp.get("rx_routes", 0),
+                                "tx_routes": bgp.get("tx_routes", 0),
+                                "for_overlay": bgp.get("for_overlay", False)
+                            }
+                            gw_info["bgp_peers"].append(bgp_peer)
+                except Exception as e:
+                    logger.debug(f"Could not fetch BGP peers for gateway {gw_mac}: {e}")
+                
+                gateway_list.append(gw_info)
+            
+            return gateway_list
+            
+        except Exception as error:
+            logger.error(f"Error fetching gateway WAN status for site {site_id}: {error}")
             raise

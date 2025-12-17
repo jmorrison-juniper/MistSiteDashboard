@@ -22,13 +22,20 @@ load_dotenv()
 
 # Configure logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# Determine log handlers - only use file handler if logs directory exists and is writable
+log_handlers = [logging.StreamHandler(sys.stdout)]
+log_file_path = "/config/logs/app.log"
+if os.path.exists("/config/logs") and os.access("/config/logs", os.W_OK):
+    try:
+        log_handlers.append(logging.FileHandler(log_file_path))
+    except (PermissionError, IOError):
+        pass  # Skip file logging if we can't write
+
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("/config/logs/app.log") if os.path.exists("/config") else logging.NullHandler()
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 
@@ -103,7 +110,7 @@ def get_site_sle(site_id):
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
         # Validate duration
-        valid_durations = ["1h", "today", "1d", "1w"]
+        valid_durations = ["10m", "1h", "today", "1d", "1w"]
         if duration not in valid_durations:
             duration = "1d"
         sle_data = mist.get_site_sle(site_id, duration=duration)
@@ -126,6 +133,64 @@ def get_site_devices(site_id):
     except Exception as error:
         logger.error(f"Error fetching site devices for {site_id}: {error}")
         return jsonify({"success": False, "error": str(error)}), 500
+
+
+@app.route("/api/sites/<site_id>/wireless-clients", methods=["GET"])
+def get_wireless_client_sessions(site_id):
+    """Get wireless client session history for the last 7 days."""
+    try:
+        mist = get_mist_connection()
+        sessions = mist.get_wireless_client_sessions(site_id)
+        logger.info(f"Retrieved {len(sessions)} wireless client sessions for site {site_id}")
+        return jsonify({"success": True, "sessions": sessions})
+    except Exception as error:
+        logger.error(f"Error fetching wireless client sessions for {site_id}: {error}")
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@app.route("/api/sites/<site_id>/wired-clients", methods=["GET"])
+def get_wired_clients(site_id):
+    """Get wired client information for the last 7 days."""
+    try:
+        mist = get_mist_connection()
+        clients = mist.get_wired_clients(site_id)
+        logger.info(f"Retrieved {len(clients)} wired clients for site {site_id}")
+        return jsonify({"success": True, "clients": clients})
+    except Exception as error:
+        logger.error(f"Error fetching wired clients for {site_id}: {error}")
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@app.route("/api/sites/<site_id>/gateway-wan", methods=["GET"])
+def get_gateway_wan_status(site_id):
+    """Get gateway WAN port status and configuration."""
+    try:
+        mist = get_mist_connection()
+        gateways = mist.get_gateway_wan_status(site_id)
+        logger.info(f"Retrieved WAN status for {len(gateways)} gateways for site {site_id}")
+        return jsonify({"success": True, "gateways": gateways})
+    except Exception as error:
+        logger.error(f"Error fetching gateway WAN status for {site_id}: {error}")
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+# Detail page routes
+@app.route("/ap-clients/<site_id>")
+def ap_clients_page(site_id):
+    """Render the AP clients history page."""
+    return render_template("ap_clients.html", site_id=site_id)
+
+
+@app.route("/switch-clients/<site_id>")
+def switch_clients_page(site_id):
+    """Render the switch wired clients page."""
+    return render_template("switch_clients.html", site_id=site_id)
+
+
+@app.route("/gateway-wan/<site_id>")
+def gateway_wan_page(site_id):
+    """Render the gateway WAN status page."""
+    return render_template("gateway_wan.html", site_id=site_id)
 
 
 @app.route("/health")
