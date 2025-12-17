@@ -199,23 +199,26 @@ python app.py
 # Press Ctrl+A, then D to detach
 ```
 
-## API Endpoints
+## Mist API Endpoints Used
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Main dashboard interface |
-| `/api/test-connection` | POST | Test Mist API connection |
-| `/api/sites` | GET | List all organization sites |
-| `/api/sites/<id>/health` | GET | Get device health for a site |
-| `/api/sites/<id>/sle` | GET | Get SLE metrics (supports `?duration=` param) |
-| `/api/sites/<id>/devices` | GET | Get device details for a site |
-| `/gateway-wan/<site_id>` | GET | Gateway WAN status page |
-| `/api/gateway/<site_id>/wan` | GET | Gateway WAN data (ports, VPN, BGP) |
-| `/ap-clients/<site_id>/<ap_mac>` | GET | AP WiFi clients page |
-| `/api/ap/<site_id>/<ap_mac>/clients` | GET | AP client data |
-| `/switch-clients/<site_id>/<switch_mac>` | GET | Switch clients page |
-| `/api/switch/<site_id>/<switch_mac>/clients` | GET | Switch client data |
-| `/health` | GET | Container health check |
+This dashboard uses the following endpoints from the [mistapi Python SDK](https://github.com/tmunzer/mistapi_python):
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/self` | Get current user info (for org detection) |
+| `GET /api/v1/orgs/:org_id` | Get organization details |
+| `GET /api/v1/orgs/:org_id/sites` | List all sites in organization |
+| `GET /api/v1/orgs/:org_id/templates` | List WLAN templates (for SSID resolution) |
+| `GET /api/v1/orgs/:org_id/wlans` | List organization WLANs |
+| `GET /api/v1/sites/:site_id/stats/devices` | Get device statistics (APs, switches, gateways) |
+| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metrics` | List available SLE metrics |
+| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/summary` | Get SLE summary scores |
+| `GET /api/v1/sites/:site_id/stats/wireless_clients` | Get wireless client statistics |
+| `GET /api/v1/sites/:site_id/clients/search` | Search wireless clients |
+| `GET /api/v1/sites/:site_id/clients/sessions/search` | Search wireless client sessions |
+| `GET /api/v1/sites/:site_id/wired_clients/search` | Search wired clients |
+| `GET /api/v1/orgs/:org_id/stats/peer_paths/search` | Search VPN peer path stats |
+| `GET /api/v1/orgs/:org_id/stats/bgp_peers/search` | Search BGP peer stats |
 
 ## Architecture
 
