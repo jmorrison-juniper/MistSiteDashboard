@@ -46,12 +46,16 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 # Import Mist connection module
 from mist_connection import MistConnection
 
+# Module-level singleton for Mist connection
+_mist_connection: MistConnection | None = None
 
-def get_mist_connection():
+
+def get_mist_connection() -> MistConnection:
     """Get or create a Mist API connection."""
-    if not hasattr(app, "mist_connection"):
-        app.mist_connection = MistConnection()
-    return app.mist_connection
+    global _mist_connection
+    if _mist_connection is None:
+        _mist_connection = MistConnection()
+    return _mist_connection
 
 
 @app.route("/")

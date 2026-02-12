@@ -67,6 +67,7 @@
         
         .sortable {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
         }
         
@@ -120,6 +121,48 @@
             color: var(--text-secondary);
             text-transform: uppercase;
         }
+        
+        /* CSV Download Button */
+        .btn-csv-download {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-csv-download:hover {
+            background: rgba(226, 0, 116, 0.2);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
+        .btn-csv-download i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Icon color utilities */
+        .icon-magenta {
+            color: var(--tm-magenta);
+        }
+        
+        .icon-magenta-light {
+            color: var(--tm-magenta-light);
+        }
+        
+        /* Empty state icon */
+        .empty-icon {
+            font-size: 4rem;
+            color: var(--tm-magenta);
+            opacity: 0.5;
+        }
+        
+        /* Initially hidden elements (toggled by JS) */
+        .initially-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -167,17 +210,22 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-clock-history me-2"></i>Client Session History</span>
-                <button id="refreshBtn" class="btn btn-sm btn-primary">
-                    <span class="loading-spinner spinner-border spinner-border-sm me-1"></span>
-                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-                </button>
+                <div>
+                    <button class="btn btn-csv-download me-2" onclick="downloadTableAsCSV('clientTable', 'wireless_clients.csv')">
+                        <i class="bi bi-download"></i>CSV
+                    </button>
+                    <button id="refreshBtn" class="btn btn-sm btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-1"></span>
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <div id="loadingMessage" class="text-center py-5">
                     <div class="spinner-border text-primary mb-3" role="status"></div>
                     <p class="text-secondary">Loading client session data...</p>
                 </div>
-                <div id="dataTable" style="display: none;">
+                <div id="dataTable" class="initially-hidden">
                     <div class="table-responsive">
                         <table class="table table-dark table-hover" id="clientTable">
                             <thead>
@@ -197,8 +245,8 @@
                         </table>
                     </div>
                 </div>
-                <div id="emptyMessage" style="display: none;" class="text-center py-5">
-                    <i class="bi bi-inbox" style="font-size: 4rem; color: var(--tm-magenta); opacity: 0.5;"></i>
+                <div id="emptyMessage" class="text-center py-5 initially-hidden">
+                    <i class="bi bi-inbox empty-icon"></i>
                     <p class="text-secondary mt-3">No client sessions found in the last 7 days</p>
                 </div>
             </div>
@@ -210,6 +258,35 @@
         const siteId = '{{ site_id }}';
         let sessionsData = [];
         let currentSort = { column: 'is_connected', direction: 'desc' };
+        
+        // Download table as CSV
+        function downloadTableAsCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            const rows = table.querySelectorAll('tr');
+            const csvContent = [];
+            
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('th, td');
+                const rowData = [];
+                cols.forEach(col => {
+                    let text = col.innerText.replace(/[\n\r]+/g, ' ').trim();
+                    if (text.includes(',') || text.includes('"')) {
+                        text = '"' + text.replace(/"/g, '""') + '"';
+                    }
+                    rowData.push(text);
+                });
+                csvContent.push(rowData.join(','));
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
         
         function formatTimestamp(timestamp) {
             if (!timestamp) return '-';

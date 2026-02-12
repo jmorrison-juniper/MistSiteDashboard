@@ -307,6 +307,7 @@
         /* Collapsible SLE cards */
         .sle-card-header {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
         }
         
@@ -480,6 +481,41 @@
         .card-header .bi-globe {
             color: var(--tm-magenta) !important;
         }
+        
+        /* CSV Download Button */
+        .btn-csv-download {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-csv-download:hover {
+            background: rgba(226, 0, 116, 0.2);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
+        .btn-csv-download i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Icon color utilities */
+        .icon-magenta {
+            color: var(--tm-magenta);
+        }
+        
+        .icon-magenta-light {
+            color: var(--tm-magenta-light);
+        }
+        
+        /* Initially hidden elements (toggled by JS) */
+        .initially-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -510,7 +546,7 @@
                     </div>
                     <div class="card-body">
                         <input type="text" id="siteSearch" class="form-control" placeholder="Search sites...">
-                        <select id="siteSelector" class="form-select" disabled>
+                        <select id="siteSelector" class="form-select" disabled aria-label="Site selector">
                             <option value="">Connect to Mist API first...</option>
                         </select>
                         <button id="loadSitesBtn" class="btn btn-primary w-100 mt-3" disabled>
@@ -521,7 +557,7 @@
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
-                <div id="siteInfo" class="card h-100" style="display: none;">
+                <div id="siteInfo" class="card h-100 initially-hidden">
                     <div class="card-header">
                         <i class="bi bi-info-circle me-2"></i>Site Information
                     </div>
@@ -532,7 +568,7 @@
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
-                <div id="sleTimeRange" class="card h-100" style="display: none;">
+                <div id="sleTimeRange" class="card h-100 initially-hidden">
                     <div class="card-header">
                         <i class="bi bi-clock-history me-2"></i>SLE Time Range
                     </div>
@@ -567,7 +603,7 @@
         </div>
 
         <!-- Health Summary -->
-        <div id="healthSection" style="display: none;">
+        <div id="healthSection" class="initially-hidden">
             <h5 class="mb-2"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
             <div class="row mb-3">
                 <div class="col-md-4 mb-2">
@@ -640,12 +676,15 @@
             </div>
 
             <!-- Data Content (hidden during loading) -->
-            <div id="dataContent" style="display: none;">
+            <div id="dataContent" class="initially-hidden">
                 <!-- Access Points Section -->
-                <h5 class="mb-3"><i class="bi bi-wifi me-2" style="color: var(--tm-magenta);"></i>Access Points</h5>
+                <h5 class="mb-3"><i class="bi bi-wifi me-2 icon-magenta"></i>Access Points</h5>
                 <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-list-ul me-2"></i>AP Devices
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-list-ul me-2"></i>AP Devices</span>
+                        <button class="btn btn-csv-download" onclick="downloadTableAsCSV('apsTable', 'access_points.csv')">
+                            <i class="bi bi-download"></i>CSV
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -690,10 +729,13 @@
                 <hr class="section-divider">
                 
                 <!-- Switches Section -->
-                <h5 class="mb-3"><i class="bi bi-hdd-stack me-2" style="color: var(--tm-magenta-light);"></i>Switches</h5>
+                <h5 class="mb-3"><i class="bi bi-hdd-stack me-2 icon-magenta-light"></i>Switches</h5>
                 <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-list-ul me-2"></i>Switch Devices
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-list-ul me-2"></i>Switch Devices</span>
+                        <button class="btn btn-csv-download" onclick="downloadTableAsCSV('switchesTable', 'switches.csv')">
+                            <i class="bi bi-download"></i>CSV
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -736,10 +778,13 @@
                 <hr class="section-divider">
                 
                 <!-- Gateways Section -->
-                <h5 class="mb-3"><i class="bi bi-router me-2" style="color: var(--tm-magenta);"></i>Gateways</h5>
+                <h5 class="mb-3"><i class="bi bi-router me-2 icon-magenta"></i>Gateways</h5>
                 <div class="card mb-3">
-                    <div class="card-header">
-                        <i class="bi bi-list-ul me-2"></i>Gateway Devices
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-list-ul me-2"></i>Gateway Devices</span>
+                        <button class="btn btn-csv-download" onclick="downloadTableAsCSV('gatewaysTable', 'gateways.csv')">
+                            <i class="bi bi-download"></i>CSV
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -794,6 +839,42 @@
         let currentSiteId = null;
         let isConnected = false;
         let currentDuration = '1d';
+
+        // Download table as CSV
+        function downloadTableAsCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            // Get the parent table element (tbody -> table)
+            const fullTable = table.closest('table');
+            if (!fullTable) return;
+            
+            const rows = fullTable.querySelectorAll('tr');
+            const csvContent = [];
+            
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('th, td');
+                const rowData = [];
+                cols.forEach(col => {
+                    // Get text content and clean it up
+                    let text = col.innerText.replace(/[\n\r]+/g, ' ').trim();
+                    // Escape quotes and wrap in quotes if contains comma
+                    if (text.includes(',') || text.includes('"')) {
+                        text = '"' + text.replace(/"/g, '""') + '"';
+                    }
+                    rowData.push(text);
+                });
+                csvContent.push(rowData.join(','));
+            });
+            
+            // Create and download the file
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
 
         // DOM elements
         const testConnectionBtn = document.getElementById('testConnectionBtn');

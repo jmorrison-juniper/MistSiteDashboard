@@ -273,6 +273,45 @@
             color: var(--accent-red);
             background-color: rgba(255, 82, 82, 0.15);
         }
+        
+        /* CSV Download Button */
+        .btn-csv-download {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: var(--text-secondary);
+            padding: 0.15rem 0.4rem;
+            font-size: 0.7rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            margin-left: 0.5rem;
+        }
+        
+        .btn-csv-download:hover {
+            background: rgba(226, 0, 116, 0.2);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
+        .btn-csv-download i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Icon color utilities */
+        .icon-magenta {
+            color: var(--tm-magenta);
+        }
+        
+        /* Empty state icon */
+        .empty-icon {
+            font-size: 4rem;
+            color: var(--tm-magenta);
+            opacity: 0.5;
+        }
+        
+        /* Initially hidden elements (toggled by JS) */
+        .initially-hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -301,11 +340,11 @@
             <p class="text-secondary">Loading gateway WAN data...</p>
         </div>
         
-        <div id="gatewaysContainer" style="display: none;">
+        <div id="gatewaysContainer" class="initially-hidden">
         </div>
         
-        <div id="emptyMessage" style="display: none;" class="text-center py-5">
-            <i class="bi bi-router" style="font-size: 4rem; color: var(--tm-magenta); opacity: 0.5;"></i>
+        <div id="emptyMessage" class="text-center py-5 initially-hidden">
+            <i class="bi bi-router empty-icon"></i>
             <p class="text-secondary mt-3">No gateways found at this site</p>
         </div>
     </div>
@@ -313,6 +352,74 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const siteId = '{{ site_id }}';
+        
+        // Store gateway WAN data for CSV export
+        const gatewayWanData = {};
+        
+        // Download WAN ports as CSV
+        function downloadWanPortsAsCSV(gwId, gwName) {
+            const wanPorts = gatewayWanData[gwId];
+            if (!wanPorts || wanPorts.length === 0) return;
+            
+            const headers = ['WAN Name', 'Status', 'IP Address', 'Interface', 'Address Mode', 'WAN Type', 'VLAN', 'Port ID'];
+            const csvContent = [headers.join(',')];
+            
+            wanPorts.forEach(port => {
+                const row = [
+                    port.wan_name || port.name || '-',
+                    port.status || '-',
+                    port.ip || '-',
+                    port.name || '-',
+                    port.address_mode || '-',
+                    port.wan_type || '-',
+                    port.vlan || '-',
+                    port.port_id || '-'
+                ].map(val => {
+                    let text = String(val).replace(/[\n\r]+/g, ' ').trim();
+                    if (text.includes(',') || text.includes('"')) {
+                        text = '"' + text.replace(/"/g, '""') + '"';
+                    }
+                    return text;
+                });
+                csvContent.push(row.join(','));
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `wan_ports_${gwName}.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+        
+        // Download table as CSV
+        function downloadTableAsCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            const rows = table.querySelectorAll('tr');
+            const csvContent = [];
+            
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('th, td');
+                const rowData = [];
+                cols.forEach(col => {
+                    let text = col.innerText.replace(/[\n\r]+/g, ' ').trim();
+                    if (text.includes(',') || text.includes('"')) {
+                        text = '"' + text.replace(/"/g, '""') + '"';
+                    }
+                    rowData.push(text);
+                });
+                csvContent.push(rowData.join(','));
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
         
         function formatBytes(bytes) {
             if (!bytes || bytes === 0) return '0 B';
@@ -361,7 +468,11 @@
             const statusBadge = gw.status === 'connected' ? 'success' : 'danger';
             
             let wanPortsHtml = '';
+            const gwId = gw.mac.replace(/:/g, '');
             if (gw.wan_ports && gw.wan_ports.length > 0) {
+                // Store WAN port data for CSV export
+                gatewayWanData[gwId] = gw.wan_ports;
+                
                 wanPortsHtml = gw.wan_ports.map(port => `
                     <div class="wan-port-card">
                         <div class="wan-port-header">
@@ -417,18 +528,24 @@
                 const vpnPercentage = Math.round((vpnUpCount / vpnTotal) * 100);
                 const vpnAllUp = vpnPercentage === 100;
                 const vpnCollapseId = `vpnPeers-${gw.mac.replace(/:/g, '')}`;
+                const vpnTableId = `vpnTable-${gw.mac.replace(/:/g, '')}`;
                 
                 vpnPeersHtml = `
                     <div class="service-path-card mt-4">
                         <div class="peer-section-header collapsed" data-bs-toggle="collapse" data-bs-target="#${vpnCollapseId}" aria-expanded="false" aria-controls="${vpnCollapseId}">
-                            <div class="service-path-title mb-0"><i class="bi bi-shield-lock me-2"></i>VPN Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                            <div class="d-flex align-items-center">
+                                <div class="service-path-title mb-0"><i class="bi bi-shield-lock me-2"></i>VPN Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                                <button class="btn btn-csv-download" onclick="event.stopPropagation(); downloadTableAsCSV('${vpnTableId}', 'vpn_peers_${gw.name || gw.mac}.csv')">
+                                    <i class="bi bi-download"></i>CSV
+                                </button>
+                            </div>
                             <div class="peer-percentage ${vpnAllUp ? 'all-up' : 'has-down'}">
                                 <i class="bi bi-${vpnAllUp ? 'check-circle' : 'exclamation-triangle'} me-1"></i>${vpnPercentage}% Up (${vpnUpCount}/${vpnTotal})
                             </div>
                         </div>
                         <div class="collapse" id="${vpnCollapseId}">
                             <div class="table-responsive mt-3">
-                                <table class="table table-dark table-sm mb-0">
+                                <table class="table table-dark table-sm mb-0" id="${vpnTableId}">
                                     <thead>
                                         <tr>
                                             <th>Status</th>
@@ -472,18 +589,24 @@
                 const bgpPercentage = Math.round((bgpUpCount / bgpTotal) * 100);
                 const bgpAllUp = bgpPercentage === 100;
                 const bgpCollapseId = `bgpPeers-${gw.mac.replace(/:/g, '')}`;
+                const bgpTableId = `bgpTable-${gw.mac.replace(/:/g, '')}`;
                 
                 bgpPeersHtml = `
                     <div class="service-path-card mt-4">
                         <div class="peer-section-header collapsed" data-bs-toggle="collapse" data-bs-target="#${bgpCollapseId}" aria-expanded="false" aria-controls="${bgpCollapseId}">
-                            <div class="service-path-title mb-0"><i class="bi bi-diagram-2 me-2"></i>BGP Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                            <div class="d-flex align-items-center">
+                                <div class="service-path-title mb-0"><i class="bi bi-diagram-2 me-2"></i>BGP Peers <i class="bi bi-chevron-down collapse-icon ms-2"></i></div>
+                                <button class="btn btn-csv-download" onclick="event.stopPropagation(); downloadTableAsCSV('${bgpTableId}', 'bgp_peers_${gw.name || gw.mac}.csv')">
+                                    <i class="bi bi-download"></i>CSV
+                                </button>
+                            </div>
                             <div class="peer-percentage ${bgpAllUp ? 'all-up' : 'has-down'}">
                                 <i class="bi bi-${bgpAllUp ? 'check-circle' : 'exclamation-triangle'} me-1"></i>${bgpPercentage}% Up (${bgpUpCount}/${bgpTotal})
                             </div>
                         </div>
                         <div class="collapse" id="${bgpCollapseId}">
                             <div class="table-responsive mt-3">
-                                <table class="table table-dark table-sm mb-0">
+                                <table class="table table-dark table-sm mb-0" id="${bgpTableId}">
                                     <thead>
                                         <tr>
                                             <th>Status</th>
@@ -580,7 +703,13 @@
                                 <small class="text-secondary">External IP:</small> ${gw.ext_ip || '-'}
                             </div>
                         </div>
-                        <h6 class="mt-4 mb-3"><i class="bi bi-ethernet me-2"></i>WAN Ports</h6>
+                        <div class="d-flex align-items-center mt-4 mb-3">
+                            <h6 class="mb-0"><i class="bi bi-ethernet me-2"></i>WAN Ports</h6>
+                            ${gw.wan_ports && gw.wan_ports.length > 0 ? `
+                            <button class="btn btn-csv-download ms-2" onclick="downloadWanPortsAsCSV('${gwId}', '${gw.name || gw.mac}')">
+                                <i class="bi bi-download"></i>CSV
+                            </button>` : ''}
+                        </div>
                         ${wanPortsHtml}
                         ${vpnPeersHtml}
                         ${bgpPeersHtml}
