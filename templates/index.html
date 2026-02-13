@@ -529,6 +529,41 @@
             color: var(--tm-magenta-light);
         }
         
+        /* Auto-width select for compact inline selects */
+        .form-select-auto {
+            width: auto;
+        }
+        
+        /* Org SLE table styling */
+        .org-sle-table .sle-cell {
+            min-width: 80px;
+        }
+        
+        .org-sle-table .sle-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background-color: rgba(255,255,255,0.1);
+            overflow: hidden;
+            margin-top: 3px;
+        }
+        
+        .org-sle-table .sle-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .org-sle-table .site-name-link {
+            color: var(--tm-magenta-light);
+            text-decoration: none;
+        }
+        
+        .org-sle-table .site-name-link:hover {
+            color: var(--tm-magenta);
+            text-decoration: underline;
+        }
+        
         /* Initially hidden elements (toggled by JS) */
         .initially-hidden {
             display: none;
@@ -607,6 +642,157 @@
                             <label class="btn btn-outline-primary" for="range1w">7 Days</label>
                         </div>
                         <p class="text-secondary small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>Select time range for SLE metrics</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Org-Wide Worst Sites Section -->
+        <div id="orgSleSection" class="initially-hidden mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-graph-down me-2"></i>Org-Wide SLE: Worst 100 Sites</span>
+                    <div class="d-flex align-items-center">
+                        <select id="orgSleDuration" class="form-select form-select-sm form-select-auto me-2">
+                            <option value="1d" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="2w">Last 2 Weeks</option>
+                        </select>
+                        <button id="refreshOrgSle" class="btn btn-sm btn-outline-light">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <!-- SLE Category Tabs -->
+                    <ul class="nav nav-tabs px-3 pt-3" id="orgSleTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="org-wifi-tab" data-bs-toggle="tab" data-bs-target="#org-wifi" type="button" role="tab" aria-controls="org-wifi" aria-selected="true">
+                                <i class="bi bi-wifi me-1"></i>WiFi
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="org-wired-tab" data-bs-toggle="tab" data-bs-target="#org-wired" type="button" role="tab" aria-controls="org-wired" aria-selected="false">
+                                <i class="bi bi-ethernet me-1"></i>Wired
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="org-wan-tab" data-bs-toggle="tab" data-bs-target="#org-wan" type="button" role="tab" aria-controls="org-wan" aria-selected="false">
+                                <i class="bi bi-globe me-1"></i>WAN
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- Tab Content -->
+                    <div class="tab-content p-3" id="orgSleTabContent">
+                        <!-- WiFi Tab -->
+                        <div class="tab-pane fade show active" id="org-wifi" role="tabpanel" aria-labelledby="org-wifi-tab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-secondary small">Sort by metric:</span>
+                                <select id="wifiSortMetric" class="form-select form-select-sm form-select-auto">
+                                    <option value="coverage" selected>Coverage</option>
+                                    <option value="capacity">Capacity</option>
+                                    <option value="throughput">Throughput</option>
+                                    <option value="time-to-connect">Time to Connect</option>
+                                    <option value="roaming">Roaming</option>
+                                    <option value="successful-connect">Successful Connect</option>
+                                    <option value="ap-availability">AP Availability</option>
+                                    <option value="ap-health">AP Health</option>
+                                </select>
+                            </div>
+                            <div id="orgWifiLoading" class="text-center py-4">
+                                <div class="spinner-border text-secondary" role="status"></div>
+                                <p class="text-secondary mt-2 mb-0">Loading WiFi SLE data...</p>
+                            </div>
+                            <div id="orgWifiContent" class="initially-hidden">
+                                <div class="table-responsive">
+                                    <table class="table table-dark table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Site</th>
+                                                <th class="text-center">APs</th>
+                                                <th class="text-center">Clients</th>
+                                                <th>Coverage</th>
+                                                <th>Capacity</th>
+                                                <th>Throughput</th>
+                                                <th>Time to Connect</th>
+                                                <th>Roaming</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orgWifiTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Wired Tab -->
+                        <div class="tab-pane fade" id="org-wired" role="tabpanel" aria-labelledby="org-wired-tab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-secondary small">Sort by metric:</span>
+                                <select id="wiredSortMetric" class="form-select form-select-sm form-select-auto">
+                                    <option value="switch-health" selected>Switch Health</option>
+                                    <option value="switch-throughput">Throughput</option>
+                                    <option value="switch-bandwidth">Bandwidth</option>
+                                </select>
+                            </div>
+                            <div id="orgWiredLoading" class="text-center py-4">
+                                <div class="spinner-border text-secondary" role="status"></div>
+                                <p class="text-secondary mt-2 mb-0">Loading Wired SLE data...</p>
+                            </div>
+                            <div id="orgWiredContent" class="initially-hidden">
+                                <div class="table-responsive">
+                                    <table class="table table-dark table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Site</th>
+                                                <th class="text-center">Switches</th>
+                                                <th class="text-center">Clients</th>
+                                                <th>Switch Health</th>
+                                                <th>Throughput</th>
+                                                <th>Bandwidth</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orgWiredTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- WAN Tab -->
+                        <div class="tab-pane fade" id="org-wan" role="tabpanel" aria-labelledby="org-wan-tab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-secondary small">Sort by metric:</span>
+                                <select id="wanSortMetric" class="form-select form-select-sm form-select-auto">
+                                    <option value="gateway-health" selected>Gateway Health</option>
+                                    <option value="wan-link-health">WAN Link Health</option>
+                                    <option value="application_health">Application Health</option>
+                                </select>
+                            </div>
+                            <div id="orgWanLoading" class="text-center py-4">
+                                <div class="spinner-border text-secondary" role="status"></div>
+                                <p class="text-secondary mt-2 mb-0">Loading WAN SLE data...</p>
+                            </div>
+                            <div id="orgWanContent" class="initially-hidden">
+                                <div class="table-responsive">
+                                    <table class="table table-dark table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Site</th>
+                                                <th class="text-center">Gateways</th>
+                                                <th class="text-center">Clients</th>
+                                                <th>Gateway Health</th>
+                                                <th>WAN Link Health</th>
+                                                <th>Application Health</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orgWanTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -876,6 +1062,10 @@
         let currentDuration = '1d';
         let currentSleData = { wifi: null, wired: null, wan: null };
         
+        // Org-wide SLE state
+        let orgSleData = { wifi: null, wired: null, wan: null };
+        let orgSleDuration = '1d';
+        
         // SLE metric display names (global for CSV export)
         const sleMetricNames = {
             'ap-availability': 'AP Availability',
@@ -1005,6 +1195,247 @@
             return 'sle-poor';
         }
 
+        // =====================================================================
+        // ORG-WIDE SLE FUNCTIONS
+        // =====================================================================
+        
+        // Fetch org-wide SLE data for a specific category
+        async function fetchOrgSle(sleType) {
+            const duration = document.getElementById('orgSleDuration').value;
+            try {
+                const response = await fetch(`/api/org/sle/${sleType}?duration=${duration}`);
+                const data = await response.json();
+                if (data.success) {
+                    orgSleData[sleType] = data.sites || [];
+                    return true;
+                } else {
+                    console.error(`Failed to fetch org ${sleType} SLE:`, data.error);
+                    return false;
+                }
+            } catch (error) {
+                console.error(`Error fetching org ${sleType} SLE:`, error);
+                return false;
+            }
+        }
+        
+        // Get SLE value from site data, handling different key formats
+        function getSleValue(site, metric) {
+            // Try the metric name directly
+            if (site[metric] !== undefined) return site[metric];
+            // Try with underscores instead of hyphens
+            const underscoreMetric = metric.replace(/-/g, '_');
+            if (site[underscoreMetric] !== undefined) return site[underscoreMetric];
+            return null;
+        }
+        
+        // Format SLE value as percentage with color coding
+        function formatSleValue(value) {
+            if (value === null || value === undefined) {
+                return '<span class="text-secondary">N/A</span>';
+            }
+            const percentage = (value * 100).toFixed(1);
+            const colorClass = getSleColorClass(parseFloat(percentage));
+            const barClass = colorClass === 'sle-good' ? 'sle-good' : 
+                           colorClass === 'sle-warning' ? 'sle-warning' : 'sle-poor';
+            return `
+                <div class="sle-cell">
+                    <span class="${colorClass}">${percentage}%</span>
+                    <div class="sle-bar">
+                        <div class="sle-bar-fill ${barClass}" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Render WiFi org SLE table
+        function renderOrgWifiTable(sortMetric = 'coverage') {
+            const tbody = document.getElementById('orgWifiTableBody');
+            const data = orgSleData.wifi || [];
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary py-4">No WiFi SLE data available</td></tr>';
+                return;
+            }
+            
+            // Sort by the selected metric (worst first)
+            const sorted = [...data].sort((a, b) => {
+                const valA = getSleValue(a, sortMetric) ?? 1;
+                const valB = getSleValue(b, sortMetric) ?? 1;
+                return valA - valB;
+            });
+            
+            tbody.innerHTML = sorted.map(site => `
+                <tr>
+                    <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                    <td class="text-center">${site.num_aps || 0}</td>
+                    <td class="text-center">${site.num_clients || 0}</td>
+                    <td>${formatSleValue(getSleValue(site, 'coverage'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'capacity'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'throughput'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'time-to-connect'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'roaming'))}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // Render Wired org SLE table
+        function renderOrgWiredTable(sortMetric = 'switch-health') {
+            const tbody = document.getElementById('orgWiredTableBody');
+            const data = orgSleData.wired || [];
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-4">No Wired SLE data available</td></tr>';
+                return;
+            }
+            
+            // Sort by the selected metric (worst first)
+            const sorted = [...data].sort((a, b) => {
+                const valA = getSleValue(a, sortMetric) ?? 1;
+                const valB = getSleValue(b, sortMetric) ?? 1;
+                return valA - valB;
+            });
+            
+            tbody.innerHTML = sorted.map(site => `
+                <tr>
+                    <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                    <td class="text-center">${site.num_switches || 0}</td>
+                    <td class="text-center">${site.num_clients || 0}</td>
+                    <td>${formatSleValue(getSleValue(site, 'switch-health'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'switch-throughput'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'switch-bandwidth'))}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // Render WAN org SLE table
+        function renderOrgWanTable(sortMetric = 'gateway-health') {
+            const tbody = document.getElementById('orgWanTableBody');
+            const data = orgSleData.wan || [];
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-4">No WAN SLE data available</td></tr>';
+                return;
+            }
+            
+            // Sort by the selected metric (worst first)
+            const sorted = [...data].sort((a, b) => {
+                const valA = getSleValue(a, sortMetric) ?? 1;
+                const valB = getSleValue(b, sortMetric) ?? 1;
+                return valA - valB;
+            });
+            
+            tbody.innerHTML = sorted.map(site => `
+                <tr>
+                    <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                    <td class="text-center">${site.num_gateways || 0}</td>
+                    <td class="text-center">${site.num_clients || 0}</td>
+                    <td>${formatSleValue(getSleValue(site, 'gateway-health'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'wan-link-health'))}</td>
+                    <td>${formatSleValue(getSleValue(site, 'application_health'))}</td>
+                </tr>
+            `).join('');
+        }
+        
+        // Load all org SLE data
+        async function loadOrgSleData() {
+            // Show org SLE section
+            document.getElementById('orgSleSection').style.display = 'block';
+            
+            // Load WiFi by default (active tab)
+            document.getElementById('orgWifiLoading').style.display = 'block';
+            document.getElementById('orgWifiContent').style.display = 'none';
+            
+            const wifiSuccess = await fetchOrgSle('wifi');
+            if (wifiSuccess) {
+                renderOrgWifiTable(document.getElementById('wifiSortMetric').value);
+                document.getElementById('orgWifiLoading').style.display = 'none';
+                document.getElementById('orgWifiContent').style.display = 'block';
+            }
+        }
+        
+        // Initialize org SLE event listeners
+        function initOrgSleListeners() {
+            // Tab change listeners - load data on first tab switch
+            document.getElementById('org-wired-tab').addEventListener('shown.bs.tab', async function() {
+                if (!orgSleData.wired) {
+                    document.getElementById('orgWiredLoading').style.display = 'block';
+                    document.getElementById('orgWiredContent').style.display = 'none';
+                    await fetchOrgSle('wired');
+                }
+                renderOrgWiredTable(document.getElementById('wiredSortMetric').value);
+                document.getElementById('orgWiredLoading').style.display = 'none';
+                document.getElementById('orgWiredContent').style.display = 'block';
+            });
+            
+            document.getElementById('org-wan-tab').addEventListener('shown.bs.tab', async function() {
+                if (!orgSleData.wan) {
+                    document.getElementById('orgWanLoading').style.display = 'block';
+                    document.getElementById('orgWanContent').style.display = 'none';
+                    await fetchOrgSle('wan');
+                }
+                renderOrgWanTable(document.getElementById('wanSortMetric').value);
+                document.getElementById('orgWanLoading').style.display = 'none';
+                document.getElementById('orgWanContent').style.display = 'block';
+            });
+            
+            // Sort metric change listeners
+            document.getElementById('wifiSortMetric').addEventListener('change', function() {
+                renderOrgWifiTable(this.value);
+            });
+            
+            document.getElementById('wiredSortMetric').addEventListener('change', function() {
+                renderOrgWiredTable(this.value);
+            });
+            
+            document.getElementById('wanSortMetric').addEventListener('change', function() {
+                renderOrgWanTable(this.value);
+            });
+            
+            // Duration change listener
+            document.getElementById('orgSleDuration').addEventListener('change', async function() {
+                orgSleDuration = this.value;
+                orgSleData = { wifi: null, wired: null, wan: null };  // Reset cached data
+                
+                // Reload the currently active tab
+                const activeTab = document.querySelector('#orgSleTabs .nav-link.active');
+                if (activeTab) {
+                    const tabId = activeTab.id;
+                    if (tabId === 'org-wifi-tab') {
+                        document.getElementById('orgWifiLoading').style.display = 'block';
+                        document.getElementById('orgWifiContent').style.display = 'none';
+                        await fetchOrgSle('wifi');
+                        renderOrgWifiTable(document.getElementById('wifiSortMetric').value);
+                        document.getElementById('orgWifiLoading').style.display = 'none';
+                        document.getElementById('orgWifiContent').style.display = 'block';
+                    } else if (tabId === 'org-wired-tab') {
+                        document.getElementById('orgWiredLoading').style.display = 'block';
+                        document.getElementById('orgWiredContent').style.display = 'none';
+                        await fetchOrgSle('wired');
+                        renderOrgWiredTable(document.getElementById('wiredSortMetric').value);
+                        document.getElementById('orgWiredLoading').style.display = 'none';
+                        document.getElementById('orgWiredContent').style.display = 'block';
+                    } else if (tabId === 'org-wan-tab') {
+                        document.getElementById('orgWanLoading').style.display = 'block';
+                        document.getElementById('orgWanContent').style.display = 'none';
+                        await fetchOrgSle('wan');
+                        renderOrgWanTable(document.getElementById('wanSortMetric').value);
+                        document.getElementById('orgWanLoading').style.display = 'none';
+                        document.getElementById('orgWanContent').style.display = 'block';
+                    }
+                }
+            });
+            
+            // Refresh button listener
+            document.getElementById('refreshOrgSle').addEventListener('click', async function() {
+                orgSleData = { wifi: null, wired: null, wan: null };  // Reset cache
+                await loadOrgSleData();  // Reload
+            });
+        }
+
+        // =====================================================================
+        // CONNECTION AND SITE MANAGEMENT FUNCTIONS
+        // =====================================================================
+        
         // Update connection status display
         function updateConnectionStatus(connected, orgName = '') {
             isConnected = connected;
@@ -1026,6 +1457,7 @@
                 if (data.success) {
                     updateConnectionStatus(true, data.org_name);
                     loadSites();
+                    loadOrgSleData();  // Load org-wide SLE data
                 } else {
                     updateConnectionStatus(false);
                     alert('Connection failed: ' + (data.error || 'Unknown error'));
@@ -1467,6 +1899,9 @@
 
         // Auto-test connection on page load
         document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize org SLE event listeners
+            initOrgSleListeners();
+            
             await testConnection();
             
             // Check if we have a site parameter in URL

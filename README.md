@@ -24,6 +24,11 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 
 ## Features
 
+- **Org-Wide SLE Dashboard**: View worst 100 sites across your entire organization
+  - WiFi, Wired, and WAN tabs for category-specific views
+  - Sortable by any SLE metric (Coverage, Capacity, Throughput, etc.)
+  - Direct links to drill down into specific site details
+  - Configurable time ranges (24h, 7 days, 2 weeks)
 - **Site Selection**: Browse and search through all sites in your Mist organization
 - **Device Health**: Real-time status of Access Points, Switches, and Gateways
   - Connected/disconnected counts with visual indicators
@@ -256,6 +261,22 @@ MistSiteDashboard/
 
 ```json
 {
+  "26.02.13": {
+    "feature-additions": [
+      "Org-Wide Worst 100 Sites dashboard on main page",
+      "WiFi/Wired/WAN tabs for org-level SLE metrics",
+      "Sortable metric dropdowns for each SLE category",
+      "Site name links to drill down into specific sites",
+      "Duration selector (24h, 7d, 2w) for org SLE data",
+      "Color-coded SLE bars with percentage thresholds"
+    ],
+    "api-additions": [
+      "GET /api/org/sle/<type> - Org-wide SLE insights endpoint"
+    ],
+    "documentation": [
+      "Added Mist API OpenAPI 3.1 specs to docs/ folder"
+    ]
+  },
   "24.12.17": {
     "feature-additions": [
       "Gateway WAN status page with port details",
