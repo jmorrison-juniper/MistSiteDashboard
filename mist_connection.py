@@ -1000,6 +1000,10 @@ class MistConnection:
                                 if total_classifier_degraded > 0:
                                     percentage = round((clf_degraded_sum / total_classifier_degraded) * 100, 1)
                                 
+                                # Build impact dict with all available fields
+                                # WiFi uses: num_aps, total_aps, num_users, total_users
+                                # WAN uses: num_gateways, total_gateways, num_users, total_users
+                                # Wired uses: num_switches, total_switches
                                 classifier_info = {
                                     "name": clf_name,
                                     "degraded_sum": clf_degraded_sum,
@@ -1007,6 +1011,10 @@ class MistConnection:
                                     "impact": {
                                         "num_aps": clf_impact.get("num_aps", 0) or 0,
                                         "total_aps": clf_impact.get("total_aps", 0) or 0,
+                                        "num_gateways": clf_impact.get("num_gateways", 0) or 0,
+                                        "total_gateways": clf_impact.get("total_gateways", 0) or 0,
+                                        "num_switches": clf_impact.get("num_switches", 0) or 0,
+                                        "total_switches": clf_impact.get("total_switches", 0) or 0,
                                         "num_users": clf_impact.get("num_users", 0) or 0,
                                         "total_users": clf_impact.get("total_users", 0) or 0
                                     },

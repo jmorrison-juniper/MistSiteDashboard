@@ -216,6 +216,74 @@
         .impact-col {
             width: 200px;
         }
+        
+        .classifier-row {
+            cursor: pointer;
+        }
+        
+        .classifier-row:hover {
+            background-color: rgba(226, 0, 116, 0.2) !important;
+        }
+        
+        .modal-content {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-header {
+            background-color: var(--bg-card-header);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-footer {
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .btn-close-white {
+            filter: invert(1);
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--text-secondary);
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: transparent;
+            color: var(--tm-magenta);
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        .nav-tabs .nav-link:hover {
+            border-bottom: 2px solid var(--tm-magenta-light);
+            color: var(--text-primary);
+        }
+        
+        .impact-detail-table {
+            font-size: 0.9rem;
+        }
+        
+        .impact-detail-table th {
+            background-color: var(--bg-card-header);
+            font-weight: 600;
+        }
+        
+        .impact-pct {
+            font-weight: 600;
+        }
+        
+        .impact-pct.high {
+            color: var(--accent-red);
+        }
+        
+        .impact-pct.medium {
+            color: var(--accent-yellow);
+        }
+        
+        .impact-pct.low {
+            color: var(--accent-green);
+        }
     </style>
 </head>
 <body>
@@ -291,6 +359,7 @@
     <script>
         const siteId = "{{ site_id }}";
         let sleData = null;
+        let siteName = 'unknown';
 
         // Metric display names
         const metricDisplayNames = {
@@ -405,46 +474,54 @@
 
         function renderClassifiersTable(metric, classifiers) {
             if (!classifiers || classifiers.length === 0) {
-                return `<div class="text-center text-secondary py-3">No classifiers available for this metric</div>`;
+                return `<div class="text-center text-secondary py-3">No degradation detected for this metric</div>`;
             }
-
-            // Find max impact for scaling bars
-            let maxImpact = 0;
-            classifiers.forEach(clf => {
-                const impact = clf.impact?.num_events || clf.impact?.count || 0;
-                if (impact > maxImpact) maxImpact = impact;
-            });
 
             let html = `
                 <table class="table table-dark classifier-table">
                     <thead>
                         <tr>
                             <th>Classifier</th>
-                            <th>Impact (Events)</th>
+                            <th>Contribution</th>
                             <th>Impact Bar</th>
-                            <th>Duration Total</th>
+                            <th>Affected Gateways/Links</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
             classifiers.forEach(clf => {
-                const name = formatClassifierName(clf.name || 'Unknown');
-                const numEvents = clf.impact?.num_events || clf.impact?.count || 0;
-                const duration = clf.impact?.duration || 0;
-                const durationStr = formatDuration(duration);
-                const barWidth = maxImpact > 0 ? (numEvents / maxImpact) * 100 : 0;
+                const clfName = clf.name || 'unknown';
+                const displayName = formatClassifierName(clfName);
+                const percentage = clf.percentage || 0;
+                const impact = clf.impact || {};
+                // WAN metrics use num_gateways/total_gateways (not num_aps/total_aps)
+                const affectedGateways = impact.num_gateways || 0;
+                const totalGateways = impact.total_gateways || 0;
+                const affectedUsers = impact.num_users || 0;
+                const totalUsers = impact.total_users || 0;
+                
+                // Build impact string for WAN metrics (gateways and links/users)
+                let impactStr = '';
+                if (totalGateways > 0) {
+                    impactStr += `${affectedGateways}/${totalGateways} Gateways`;
+                }
+                if (totalUsers > 0) {
+                    if (impactStr) impactStr += ', ';
+                    impactStr += `${affectedUsers}/${totalUsers} Links`;
+                }
+                if (!impactStr) impactStr = '-';
 
                 html += `
-                    <tr class="classifier-row">
-                        <td>${name}</td>
-                        <td>${numEvents.toLocaleString()}</td>
+                    <tr class="classifier-row" onclick="showImpactDetails('${metric}', '${clfName}', '${displayName}')" title="Click to see affected devices">
+                        <td><i class="bi bi-search me-2 text-secondary"></i>${displayName}</td>
+                        <td><strong>${percentage}%</strong></td>
                         <td class="impact-col">
                             <div class="impact-bar">
-                                <div class="impact-bar-fill" style="width: ${barWidth}%;"></div>
+                                <div class="impact-bar-fill" style="width: ${percentage}%;"></div>
                             </div>
                         </td>
-                        <td>${durationStr}</td>
+                        <td>${impactStr} <i class="bi bi-chevron-right text-secondary"></i></td>
                     </tr>
                 `;
             });
@@ -476,6 +553,22 @@
             const duration = document.getElementById('durationSelect').value;
             
             try {
+                // Fetch site name if not already loaded
+                if (siteName === 'unknown') {
+                    try {
+                        const sitesResponse = await fetch('/api/sites');
+                        if (sitesResponse.ok) {
+                            const sitesData = await sitesResponse.json();
+                            const site = sitesData.sites.find(s => s.id === siteId);
+                            if (site) {
+                                siteName = site.name.replace(/[^a-zA-Z0-9]/g, '_');
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not fetch site name:', e);
+                    }
+                }
+                
                 const response = await fetch(`/api/sites/${siteId}/sle/wan?duration=${duration}`);
                 if (!response.ok) throw new Error('Failed to fetch SLE data');
                 
@@ -521,7 +614,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `wan_sle_${metric}_classifiers.csv`;
+            a.download = `wan_sle_${metric}_classifiers_${siteName}.csv`;
             a.click();
             URL.revokeObjectURL(url);
         }
@@ -553,9 +646,133 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `wan_sle_details_${document.getElementById('durationSelect').value}.csv`;
+            a.download = `wan_sle_details_${document.getElementById('durationSelect').value}_${siteName}.csv`;
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // Show impact details modal for a classifier
+        async function showImpactDetails(metric, classifier, classifierDisplayName) {
+            const modal = new bootstrap.Modal(document.getElementById('impactModal'));
+            document.getElementById('impactModalLabel').textContent = `${classifierDisplayName} - Affected Devices`;
+            document.getElementById('impactModalBody').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-light" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-secondary">Loading impact details...</p>
+                </div>
+            `;
+            modal.show();
+            
+            try {
+                const duration = document.getElementById('durationSelect').value;
+                const response = await fetch(`/api/sites/${siteId}/sle/impact/${metric}/${classifier}?duration=${duration}`);
+                const data = await response.json();
+                
+                renderImpactDetails(data);
+            } catch (error) {
+                console.error('Error fetching impact details:', error);
+                document.getElementById('impactModalBody').innerHTML = `
+                    <div class="alert alert-danger">Failed to load impact details: ${error.message}</div>
+                `;
+            }
+        }
+        
+        function renderImpactDetails(data) {
+            const aps = data.aps || [];
+            const wlans = data.wlans || [];
+            const deviceTypes = data.device_types || [];
+            const deviceOs = data.device_os || [];
+            const bands = data.bands || [];
+            
+            // Build tabs based on available data
+            let tabsHtml = '<ul class="nav nav-tabs" role="tablist">';
+            let contentHtml = '<div class="tab-content mt-3">';
+            let firstTab = true;
+            
+            if (aps.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#apsTab">Gateways (${aps.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">${renderImpactTable(aps, 'name', 'Gateway Name')}</div>`;
+                firstTab = false;
+            }
+            
+            if (wlans.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#wlansTab">WAN Links (${wlans.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">${renderImpactTable(wlans, 'name', 'WAN Link')}</div>`;
+                firstTab = false;
+            }
+            
+            if (deviceTypes.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceTypesTab">Link Types (${deviceTypes.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">${renderImpactTable(deviceTypes, 'name', 'Link Type')}</div>`;
+                firstTab = false;
+            }
+            
+            if (deviceOs.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceOsTab">Applications (${deviceOs.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">${renderImpactTable(deviceOs, 'name', 'Application')}</div>`;
+                firstTab = false;
+            }
+            
+            if (bands.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#bandsTab">Paths (${bands.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">${renderImpactTable(bands, 'band', 'Path')}</div>`;
+                firstTab = false;
+            }
+            
+            tabsHtml += '</ul>';
+            contentHtml += '</div>';
+            
+            if (firstTab) {
+                // No data in any category
+                document.getElementById('impactModalBody').innerHTML = `
+                    <div class="text-center text-secondary py-4">
+                        <i class="bi bi-info-circle icon-large"></i>
+                        <p class="mt-2">No specific device impact data available for this classifier.</p>
+                    </div>
+                `;
+            } else {
+                document.getElementById('impactModalBody').innerHTML = tabsHtml + contentHtml;
+            }
+        }
+        
+        function renderImpactTable(items, nameKey, nameLabel) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead>
+                        <tr>
+                            <th>${nameLabel}</th>
+                            <th>Degraded</th>
+                            <th>Total</th>
+                            <th>Impact %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            items.forEach(item => {
+                const name = item[nameKey] || 'Unknown';
+                const degraded = item.degraded || 0;
+                const total = item.total || 0;
+                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
+                
+                let pctClass = 'low';
+                if (pct >= 10) pctClass = 'high';
+                else if (pct >= 5) pctClass = 'medium';
+                
+                html += `
+                    <tr>
+                        <td>${name}</td>
+                        <td>${degraded.toLocaleString()}</td>
+                        <td>${total.toLocaleString()}</td>
+                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            return html;
         }
 
         // Initialize on page load
@@ -566,5 +783,27 @@
             document.getElementById('durationSelect').addEventListener('change', refreshData);
         });
     </script>
+    
+    <!-- Impact Details Modal -->
+    <div class="modal fade" id="impactModal" tabindex="-1" aria-labelledby="impactModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="impactModalLabel">Affected Devices</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="impactModalBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-light" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
