@@ -1234,7 +1234,7 @@
                 return '<span class="text-secondary">N/A</span>';
             }
             const percentage = (value * 100).toFixed(1);
-            const colorClass = getSleColorClass(parseFloat(percentage));
+            const colorClass = getSleClass(parseFloat(percentage));
             const barClass = colorClass === 'sle-good' ? 'sle-good' : 
                            colorClass === 'sle-warning' ? 'sle-warning' : 'sle-poor';
             return `
