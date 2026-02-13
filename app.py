@@ -197,6 +197,39 @@ def gateway_wan_page(site_id):
     return render_template("gateway_wan.html", site_id=site_id)
 
 
+# SLE detail page routes
+@app.route("/sle/wifi/<site_id>")
+def wifi_sle_page(site_id):
+    """Render the WiFi SLE detail page."""
+    return render_template("wifi_sle.html", site_id=site_id)
+
+
+@app.route("/sle/wired/<site_id>")
+def wired_sle_page(site_id):
+    """Render the Wired SLE detail page."""
+    return render_template("wired_sle.html", site_id=site_id)
+
+
+@app.route("/sle/wan/<site_id>")
+def wan_sle_page(site_id):
+    """Render the WAN SLE detail page."""
+    return render_template("wan_sle.html", site_id=site_id)
+
+
+# SLE detail API routes
+@app.route("/api/sites/<site_id>/sle/<category>", methods=["GET"])
+def get_sle_details(site_id, category):
+    """Get detailed SLE data for a specific category (wifi, wired, wan)."""
+    try:
+        mist = get_mist_connection()
+        duration = request.args.get("duration", "1d")
+        data = mist.get_sle_details(site_id, category, duration)
+        return jsonify(data)
+    except Exception as error:
+        logger.error(f"Error fetching SLE details: {error}")
+        return jsonify({"error": str(error)}), 500
+
+
 @app.route("/health")
 def health_check():
     """Health check endpoint for container orchestration."""

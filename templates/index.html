@@ -503,6 +503,23 @@
             margin-right: 0.25rem;
         }
         
+        /* SLE Details Button */
+        .btn-sle-details {
+            background: rgba(226, 0, 116, 0.2);
+            border: 1px solid var(--tm-magenta);
+            color: var(--tm-magenta-light);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-sle-details:hover {
+            background: rgba(226, 0, 116, 0.4);
+            border-color: var(--tm-magenta-light);
+            color: var(--text-primary);
+        }
+        
         /* Icon color utilities */
         .icon-magenta {
             color: var(--tm-magenta);
@@ -715,6 +732,12 @@
                     <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wifiSleCollapse">
                         <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>WiFi SLE Metrics</span>
                         <div class="d-flex align-items-center">
+                            <button class="btn btn-sle-details me-2" onclick="event.stopPropagation(); navigateToSleDetails('wifi')" title="View detailed WiFi SLE classifiers">
+                                <i class="bi bi-box-arrow-up-right"></i> Details
+                            </button>
+                            <button class="btn btn-csv-download me-2" onclick="event.stopPropagation(); downloadSleAsCSV('wifi', 'wifi_sle_metrics.csv')">
+                                <i class="bi bi-download"></i>CSV
+                            </button>
                             <span class="sle-average me-2" id="wifiSleAverage">-</span>
                             <span class="badge bg-secondary" id="wifiSleAvailable">N/A</span>
                         </div>
@@ -764,6 +787,12 @@
                     <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wiredSleCollapse">
                         <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>Wired SLE Metrics</span>
                         <div class="d-flex align-items-center">
+                            <button class="btn btn-sle-details me-2" onclick="event.stopPropagation(); navigateToSleDetails('wired')" title="View detailed Wired SLE classifiers">
+                                <i class="bi bi-box-arrow-up-right"></i> Details
+                            </button>
+                            <button class="btn btn-csv-download me-2" onclick="event.stopPropagation(); downloadSleAsCSV('wired', 'wired_sle_metrics.csv')">
+                                <i class="bi bi-download"></i>CSV
+                            </button>
                             <span class="sle-average me-2" id="wiredSleAverage">-</span>
                             <span class="badge bg-secondary" id="wiredSleAvailable">N/A</span>
                         </div>
@@ -811,6 +840,12 @@
                     <div class="card-header sle-card-header collapsed d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#wanSleCollapse">
                         <span><i class="bi bi-chevron-down collapse-icon me-2"></i><i class="bi bi-graph-up me-2"></i>WAN SLE Metrics</span>
                         <div class="d-flex align-items-center">
+                            <button class="btn btn-sle-details me-2" onclick="event.stopPropagation(); navigateToSleDetails('wan')" title="View detailed WAN SLE classifiers">
+                                <i class="bi bi-box-arrow-up-right"></i> Details
+                            </button>
+                            <button class="btn btn-csv-download me-2" onclick="event.stopPropagation(); downloadSleAsCSV('wan', 'wan_sle_metrics.csv')">
+                                <i class="bi bi-download"></i>CSV
+                            </button>
                             <span class="sle-average me-2" id="wanSleAverage">-</span>
                             <span class="badge bg-secondary" id="wanSleAvailable">N/A</span>
                         </div>
@@ -839,6 +874,26 @@
         let currentSiteId = null;
         let isConnected = false;
         let currentDuration = '1d';
+        let currentSleData = { wifi: null, wired: null, wan: null };
+        
+        // SLE metric display names (global for CSV export)
+        const sleMetricNames = {
+            'ap-availability': 'AP Availability',
+            'ap-health': 'AP Health',
+            'capacity': 'Capacity',
+            'coverage': 'Coverage',
+            'roaming': 'Roaming',
+            'successful-connect': 'Successful Connect',
+            'throughput': 'Throughput',
+            'time-to-connect': 'Time to Connect',
+            'switch-health': 'Switch Health',
+            'switch-stc': 'Switch Successful Connect',
+            'switch-throughput': 'Switch Throughput',
+            'gateway-health': 'Gateway Health',
+            'gateway-bandwidth': 'Gateway Bandwidth',
+            'wan-link-health': 'WAN Link Health',
+            'application-health': 'Application Health'
+        };
 
         // Download table as CSV
         function downloadTableAsCSV(tableId, filename) {
@@ -874,6 +929,36 @@
             link.download = filename;
             link.click();
             URL.revokeObjectURL(link.href);
+        }
+        
+        // Download SLE metrics as CSV
+        function downloadSleAsCSV(category, filename) {
+            const data = currentSleData[category];
+            if (!data || !data.metrics || Object.keys(data.metrics).length === 0) return;
+            
+            const headers = ['Metric', 'Value (%)'];
+            const csvContent = [headers.join(',')];
+            
+            Object.entries(data.metrics).forEach(([metric, value]) => {
+                const displayName = sleMetricNames[metric] || metric;
+                csvContent.push(`"${displayName}",${value}`);
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+        
+        // Navigate to SLE detail page
+        function navigateToSleDetails(category) {
+            if (!currentSiteId) {
+                alert('Please select a site first');
+                return;
+            }
+            window.location.href = `/sle/${category}/${currentSiteId}`;
         }
 
         // DOM elements
@@ -1206,24 +1291,10 @@
 
         // Update SLE display with subcategories
         function updateSleDisplay(sle) {
-            // Metric display names
-            const metricNames = {
-                'ap-availability': 'AP Availability',
-                'ap-health': 'AP Health',
-                'capacity': 'Capacity',
-                'coverage': 'Coverage',
-                'roaming': 'Roaming',
-                'successful-connect': 'Successful Connect',
-                'throughput': 'Throughput',
-                'time-to-connect': 'Time to Connect',
-                'switch-health': 'Switch Health',
-                'switch-stc': 'Switch Successful Connect',
-                'switch-throughput': 'Switch Throughput',
-                'gateway-health': 'Gateway Health',
-                'gateway-bandwidth': 'Gateway Bandwidth',
-                'wan-link-health': 'WAN Link Health',
-                'application-health': 'Application Health'
-            };
+            // Store SLE data globally for CSV export
+            currentSleData.wifi = sle.wifi;
+            currentSleData.wired = sle.wired;
+            currentSleData.wan = sle.wan;
             
             // Metric descriptions from Juniper Mist OpenAPI documentation
             const metricDescriptions = {
@@ -1249,14 +1320,14 @@
                 'application-health': 'Monitors the performance of applications over the WAN, tracking issues like disconnects, latency, jitter, and packet loss.'
             };
             
-            // Update each SLE category
-            updateSleCategoryDisplay('wifi', sle.wifi, metricNames, metricDescriptions);
-            updateSleCategoryDisplay('wired', sle.wired, metricNames, metricDescriptions);
-            updateSleCategoryDisplay('wan', sle.wan, metricNames, metricDescriptions);
+            // Update each SLE category (using global sleMetricNames)
+            updateSleCategoryDisplay('wifi', sle.wifi, metricDescriptions);
+            updateSleCategoryDisplay('wired', sle.wired, metricDescriptions);
+            updateSleCategoryDisplay('wan', sle.wan, metricDescriptions);
         }
         
         // Update a single SLE category display
-        function updateSleCategoryDisplay(category, data, metricNames, metricDescriptions) {
+        function updateSleCategoryDisplay(category, data, metricDescriptions) {
             const container = document.getElementById(`${category}SleMetrics`);
             const badge = document.getElementById(`${category}SleAvailable`);
             const avgDisplay = document.getElementById(`${category}SleAverage`);
@@ -1293,7 +1364,7 @@
             let html = '<div class="row">';
             
             Object.entries(metrics).forEach(([metric, value], index) => {
-                const displayName = metricNames[metric] || formatMetricName(metric);
+                const displayName = sleMetricNames[metric] || formatMetricName(metric);
                 const description = metricDescriptions[metric] || '';
                 const colorClass = getSleClass(value);
                 const valueColorClass = getValueColorClass(value);

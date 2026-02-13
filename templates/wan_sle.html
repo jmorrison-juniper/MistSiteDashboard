@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAN SLE Details - Mist Site Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --tm-magenta: #E20074;
+            --tm-magenta-dark: #B8005D;
+            --tm-magenta-light: #FF3399;
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2D2D2D;
+            --bg-card: #3D3D3D;
+            --bg-card-header: #4A4A4A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --accent-green: #00C853;
+            --accent-red: #FF5252;
+            --accent-yellow: #FFD600;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important;
+            border-bottom: none;
+            box-shadow: 0 2px 10px rgba(226, 0, 116, 0.3);
+        }
+        
+        .navbar-brand {
+            color: var(--text-primary) !important;
+            font-weight: 700;
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header {
+            background-color: var(--bg-card-header);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--tm-magenta-light) 0%, var(--tm-magenta) 100%);
+        }
+        
+        .btn-outline-light:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .badge.bg-success { background: linear-gradient(135deg, var(--accent-green) 0%, #00A846 100%) !important; }
+        .badge.bg-warning { background: linear-gradient(135deg, var(--accent-yellow) 0%, #E6C200 100%) !important; color: #1A1A1A !important; }
+        .badge.bg-danger { background: linear-gradient(135deg, var(--accent-red) 0%, #E64545 100%) !important; }
+        .badge.bg-info { background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important; }
+        
+        .metric-card {
+            margin-bottom: 1.5rem;
+        }
+        
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        
+        .metric-header:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .metric-value.good { color: var(--accent-green); }
+        .metric-value.warning { color: var(--accent-yellow); }
+        .metric-value.bad { color: var(--accent-red); }
+        
+        .classifier-table {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-border-color: rgba(255,255,255,0.1);
+        }
+        
+        .classifier-table thead th {
+            background-color: var(--bg-card-header);
+            color: var(--text-primary);
+            font-weight: 600;
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        .classifier-row:hover {
+            background-color: rgba(226, 0, 116, 0.1) !important;
+        }
+        
+        .impact-bar {
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .impact-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--tm-magenta) 0%, var(--accent-red) 100%);
+            border-radius: 4px;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(26, 26, 26, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.hidden {
+            display: none;
+        }
+        
+        .metric-collapse-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .metric-header.collapsed .metric-collapse-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .btn-csv-download {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .btn-csv-download:hover {
+            background: rgba(226, 0, 116, 0.3);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
+        .duration-select {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .duration-select:focus {
+            border-color: var(--tm-magenta);
+            box-shadow: 0 0 0 0.25rem rgba(226, 0, 116, 0.25);
+        }
+        
+        .breadcrumb {
+            background-color: transparent;
+            padding: 0;
+        }
+        
+        .breadcrumb-item a {
+            color: var(--tm-magenta-light);
+            text-decoration: none;
+        }
+        
+        .breadcrumb-item a:hover {
+            color: var(--tm-magenta);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--text-secondary);
+        }
+        
+        .breadcrumb-item + .breadcrumb-item::before {
+            color: var(--text-secondary);
+        }
+        
+        .loading-spinner-large {
+            width: 3rem;
+            height: 3rem;
+        }
+        
+        .width-auto {
+            width: auto;
+        }
+        
+        .icon-large {
+            font-size: 3rem;
+        }
+        
+        .summary-card {
+            background-color: var(--bg-secondary);
+        }
+        
+        .impact-col {
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-light loading-spinner-large" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-light">Loading WAN SLE data...</p>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark px-4 py-2">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-globe me-2"></i>
+                WAN SLE Details
+            </span>
+            <div class="d-flex align-items-center">
+                <select class="form-select duration-select width-auto me-3" id="durationSelect" title="Select time duration">
+                    <option value="1h">Last 1 Hour</option>
+                    <option value="1d" selected>Last 24 Hours</option>
+                    <option value="1w">Last 7 Days</option>
+                </select>
+                <button class="btn btn-outline-light me-2" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <button class="btn btn-csv-download" onclick="downloadAllAsCSV()">
+                    <i class="bi bi-download me-1"></i> Export All CSV
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 py-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">WAN SLE Details</li>
+            </ol>
+        </nav>
+
+        <!-- Summary Card -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-globe me-2"></i>WAN Service Level Experience Overview</span>
+                <span class="badge bg-info" id="metricCount">0 metrics</span>
+            </div>
+            <div class="card-body">
+                <div class="row" id="summaryRow">
+                    <div class="col-12 text-center text-secondary py-3">
+                        Loading summary data...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metric Details -->
+        <div id="metricsContainer">
+            <div class="text-center text-secondary py-5">
+                <div class="spinner-border text-secondary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Loading metric details...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const siteId = "{{ site_id }}";
+        let sleData = null;
+
+        // Metric display names
+        const metricDisplayNames = {
+            'gateway-health': 'Gateway Health',
+            'wan-link-health': 'WAN Link Health',
+            'application-health': 'Application Health',
+            'gateway-bandwidth': 'Gateway Bandwidth'
+        };
+
+        function getValueClass(value) {
+            if (value === null || value === undefined) return '';
+            if (value >= 90) return 'good';
+            if (value >= 70) return 'warning';
+            return 'bad';
+        }
+
+        function formatClassifierName(name) {
+            return name.replace(/-/g, ' ').replace(/_/g, ' ')
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
+        function renderSummary(data) {
+            const metrics = data.metrics || {};
+            const metricNames = Object.keys(metrics);
+            
+            document.getElementById('metricCount').textContent = `${metricNames.length} metrics`;
+            
+            if (metricNames.length === 0) {
+                document.getElementById('summaryRow').innerHTML = `
+                    <div class="col-12 text-center text-secondary py-3">
+                        No WAN SLE metrics available for this site
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            metricNames.forEach(metric => {
+                const metricData = metrics[metric];
+                const value = metricData.sle_value;
+                const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
+                const valueClass = getValueClass(value);
+                
+                html += `
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="text-center p-3 rounded summary-card">
+                            <div class="text-secondary small mb-1">${displayName}</div>
+                            <div class="metric-value ${valueClass}">
+                                ${value !== null ? value.toFixed(1) + '%' : 'N/A'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('summaryRow').innerHTML = html;
+        }
+
+        function renderMetrics(data) {
+            const metrics = data.metrics || {};
+            const metricNames = Object.keys(metrics);
+            
+            if (metricNames.length === 0) {
+                document.getElementById('metricsContainer').innerHTML = `
+                    <div class="text-center text-secondary py-5">
+                        <i class="bi bi-globe icon-large"></i>
+                        <p class="mt-3">No WAN SLE metrics available for this site</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            metricNames.forEach((metric, index) => {
+                const metricData = metrics[metric];
+                const value = metricData.sle_value;
+                const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
+                const valueClass = getValueClass(value);
+                const classifiers = metricData.classifiers || [];
+                const collapseId = `metric-${index}`;
+                
+                html += `
+                    <div class="card metric-card">
+                        <div class="card-header metric-header collapsed" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-chevron-down metric-collapse-icon me-2"></i>
+                                <span>${displayName}</span>
+                                <span class="ms-3 badge bg-secondary">${classifiers.length} classifiers</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-csv-download me-2" onclick="event.stopPropagation(); downloadMetricAsCSV('${metric}')">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                                <span class="metric-value ${valueClass}">
+                                    ${value !== null ? value.toFixed(1) + '%' : 'N/A'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="collapse" id="${collapseId}">
+                            <div class="card-body">
+                                ${renderClassifiersTable(metric, classifiers)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('metricsContainer').innerHTML = html;
+        }
+
+        function renderClassifiersTable(metric, classifiers) {
+            if (!classifiers || classifiers.length === 0) {
+                return `<div class="text-center text-secondary py-3">No classifiers available for this metric</div>`;
+            }
+
+            // Find max impact for scaling bars
+            let maxImpact = 0;
+            classifiers.forEach(clf => {
+                const impact = clf.impact?.num_events || clf.impact?.count || 0;
+                if (impact > maxImpact) maxImpact = impact;
+            });
+
+            let html = `
+                <table class="table table-dark classifier-table">
+                    <thead>
+                        <tr>
+                            <th>Classifier</th>
+                            <th>Impact (Events)</th>
+                            <th>Impact Bar</th>
+                            <th>Duration Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            classifiers.forEach(clf => {
+                const name = formatClassifierName(clf.name || 'Unknown');
+                const numEvents = clf.impact?.num_events || clf.impact?.count || 0;
+                const duration = clf.impact?.duration || 0;
+                const durationStr = formatDuration(duration);
+                const barWidth = maxImpact > 0 ? (numEvents / maxImpact) * 100 : 0;
+
+                html += `
+                    <tr class="classifier-row">
+                        <td>${name}</td>
+                        <td>${numEvents.toLocaleString()}</td>
+                        <td class="impact-col">
+                            <div class="impact-bar">
+                                <div class="impact-bar-fill" style="width: ${barWidth}%;"></div>
+                            </div>
+                        </td>
+                        <td>${durationStr}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            return html;
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '0s';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            let parts = [];
+            if (hours > 0) parts.push(`${hours}h`);
+            if (minutes > 0) parts.push(`${minutes}m`);
+            if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+            
+            return parts.join(' ');
+        }
+
+        async function fetchData() {
+            const duration = document.getElementById('durationSelect').value;
+            
+            try {
+                const response = await fetch(`/api/sites/${siteId}/sle/wan?duration=${duration}`);
+                if (!response.ok) throw new Error('Failed to fetch SLE data');
+                
+                sleData = await response.json();
+                renderSummary(sleData);
+                renderMetrics(sleData);
+            } catch (error) {
+                console.error('Error fetching SLE data:', error);
+                document.getElementById('metricsContainer').innerHTML = `
+                    <div class="text-center text-danger py-5">
+                        <i class="bi bi-exclamation-triangle icon-large"></i>
+                        <p class="mt-3">Error loading WAN SLE data: ${error.message}</p>
+                        <button class="btn btn-primary" onclick="refreshData()">Try Again</button>
+                    </div>
+                `;
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        }
+
+        function refreshData() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            fetchData();
+        }
+
+        function downloadMetricAsCSV(metric) {
+            if (!sleData || !sleData.metrics || !sleData.metrics[metric]) return;
+            
+            const metricData = sleData.metrics[metric];
+            const classifiers = metricData.classifiers || [];
+            const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
+            
+            let csv = 'Classifier,Impact Events,Duration (seconds)\n';
+            
+            classifiers.forEach(clf => {
+                const name = clf.name || 'Unknown';
+                const events = clf.impact?.num_events || clf.impact?.count || 0;
+                const duration = clf.impact?.duration || 0;
+                csv += `"${name}",${events},${duration}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wan_sle_${metric}_classifiers.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadAllAsCSV() {
+            if (!sleData || !sleData.metrics) return;
+            
+            let csv = 'Metric,Classifier,SLE Value (%),Impact Events,Duration (seconds)\n';
+            
+            Object.keys(sleData.metrics).forEach(metric => {
+                const metricData = sleData.metrics[metric];
+                const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
+                const sleValue = metricData.sle_value;
+                const classifiers = metricData.classifiers || [];
+                
+                if (classifiers.length === 0) {
+                    csv += `"${displayName}","",${sleValue !== null ? sleValue : ''},0,0\n`;
+                } else {
+                    classifiers.forEach(clf => {
+                        const clfName = clf.name || 'Unknown';
+                        const events = clf.impact?.num_events || clf.impact?.count || 0;
+                        const duration = clf.impact?.duration || 0;
+                        csv += `"${displayName}","${clfName}",${sleValue !== null ? sleValue : ''},${events},${duration}\n`;
+                    });
+                }
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wan_sle_details_${document.getElementById('durationSelect').value}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            
+            // Re-fetch when duration changes
+            document.getElementById('durationSelect').addEventListener('change', refreshData);
+        });
+    </script>
+</body>
+</html>

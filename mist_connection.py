@@ -387,6 +387,280 @@ class MistConnection:
             logger.error(f"Error fetching site SLE for {site_id}: {error}")
             raise
     
+    def get_sle_classifiers(
+        self, site_id: str, metric: str, scope: str = "site"
+    ) -> List[Dict[str, Any]]:
+        """Get list of classifiers for a specific SLE metric.
+        
+        Args:
+            site_id: The site ID
+            metric: The SLE metric name (e.g., 'coverage', 'capacity', 'time-to-connect')
+            scope: The scope type ('site', 'ap', 'switch', 'gateway', 'client')
+        
+        Returns:
+            List of classifier dictionaries with name and impact info
+        """
+        try:
+            session = self._get_session()
+            
+            response = mistapi.api.v1.sites.sle.listSiteSleMetricClassifiers(
+                session,
+                site_id,
+                scope=scope,
+                scope_id=site_id,
+                metric=metric
+            )
+            data = response.data if hasattr(response, "data") else response
+            
+            if isinstance(data, dict):
+                classifiers = data.get("classifiers", [])
+                return classifiers if isinstance(classifiers, list) else []
+            return []
+            
+        except Exception as error:
+            logger.error(f"Error fetching SLE classifiers for {metric}: {error}")
+            return []
+    
+    def get_sle_classifier_details(
+        self,
+        site_id: str,
+        metric: str,
+        classifier: str,
+        duration: str = "1d",
+        scope: str = "site"
+    ) -> Dict[str, Any]:
+        """Get detailed breakdown for a specific SLE classifier.
+        
+        Args:
+            site_id: The site ID
+            metric: The SLE metric name
+            classifier: The classifier name
+            duration: Time range ('1h', '1d', '1w')
+            scope: The scope type
+        
+        Returns:
+            Dictionary with classifier details and samples
+        """
+        try:
+            session = self._get_session()
+            
+            response = mistapi.api.v1.sites.sle.getSiteSleClassifierDetails(
+                session,
+                site_id,
+                scope=scope,
+                scope_id=site_id,
+                metric=metric,
+                classifier=classifier,
+                duration=duration
+            )
+            data = response.data if hasattr(response, "data") else response
+            
+            return data if isinstance(data, dict) else {}
+            
+        except Exception as error:
+            logger.error(f"Error fetching classifier details for {metric}/{classifier}: {error}")
+            return {}
+    
+    def get_sle_impact_summary(
+        self,
+        site_id: str,
+        metric: str,
+        duration: str = "1d",
+        classifier: Optional[str] = None,
+        scope: str = "site"
+    ) -> Dict[str, Any]:
+        """Get impact summary showing affected clients/devices for an SLE metric.
+        
+        Args:
+            site_id: The site ID
+            metric: The SLE metric name
+            duration: Time range ('1h', '1d', '1w')
+            classifier: Optional classifier to filter by
+            scope: The scope type
+        
+        Returns:
+            Dictionary with impact summary data
+        """
+        try:
+            session = self._get_session()
+            
+            kwargs: Dict[str, Any] = {
+                "mist_session": session,
+                "site_id": site_id,
+                "scope": scope,
+                "scope_id": site_id,
+                "metric": metric,
+                "duration": duration
+            }
+            if classifier:
+                kwargs["classifier"] = classifier
+            
+            response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(**kwargs)
+            data = response.data if hasattr(response, "data") else response
+            
+            return data if isinstance(data, dict) else {}
+            
+        except Exception as error:
+            logger.error(f"Error fetching SLE impact summary for {metric}: {error}")
+            return {}
+    
+    def get_sle_details(self, site_id: str, category: str, duration: str = "1d") -> Dict[str, Any]:
+        """Get comprehensive SLE details for a category (wifi, wired, or wan).
+        
+        This method fetches all metrics for the category with their classifiers
+        and impact data for the detail pages.
+        
+        Args:
+            site_id: The site ID
+            category: SLE category ('wifi', 'wired', 'wan')
+            duration: Time range ('1h', '1d', '1w')
+        
+        Returns:
+            Dictionary with metrics, classifiers, and impact data
+        """
+        try:
+            session = self._get_session()
+            
+            # Define which metrics belong to which category
+            metric_categories = {
+                "wifi": ["coverage", "capacity", "time-to-connect", "roaming", "throughput", "ap-availability", "ap-health"],
+                "wired": ["switch-health", "switch-throughput", "switch-stc"],
+                "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
+            }
+            
+            if category not in metric_categories:
+                raise ValueError(f"Invalid category: {category}")
+            
+            # Get enabled metrics for site first
+            try:
+                metrics_response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
+                    session,
+                    site_id,
+                    scope="site",
+                    scope_id=site_id
+                )
+                metrics_data = metrics_response.data if hasattr(metrics_response, "data") else metrics_response
+                enabled_metrics = metrics_data.get("enabled", []) if isinstance(metrics_data, dict) else []
+            except Exception as e:
+                logger.debug(f"Could not get enabled metrics: {e}")
+                enabled_metrics = []
+            
+            # Filter to only metrics in this category that are enabled
+            category_metrics = [
+                m for m in metric_categories[category]
+                if m in enabled_metrics or any(
+                    em.startswith(m) for em in enabled_metrics
+                )
+            ]
+            
+            result: Dict[str, Any] = {
+                "category": category,
+                "duration": duration,
+                "metrics": {}
+            }
+            
+            for metric in category_metrics:
+                # Find actual metric name (might have version suffix like -v2)
+                actual_metric = metric
+                for em in enabled_metrics:
+                    if em.startswith(metric):
+                        actual_metric = em
+                        break
+                
+                metric_data: Dict[str, Any] = {
+                    "name": metric,
+                    "sle_value": None,
+                    "classifiers": [],
+                    "impact": {}
+                }
+                
+                # Get SLE summary value
+                try:
+                    summary_response = mistapi.api.v1.sites.sle.getSiteSleSummary(
+                        session,
+                        site_id,
+                        scope="site",
+                        scope_id=site_id,
+                        metric=actual_metric,
+                        duration=duration
+                    )
+                    summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
+                    
+                    if isinstance(summary_data, dict) and "sle" in summary_data:
+                        sle_info = summary_data.get("sle", {})
+                        samples = sle_info.get("samples", {})
+                        total = sum(x for x in samples.get("total", []) if x is not None)
+                        degraded = sum(x for x in samples.get("degraded", []) if x is not None)
+                        
+                        if total > 0:
+                            metric_data["sle_value"] = round(((total - degraded) / total) * 100, 1)
+                except Exception as e:
+                    logger.debug(f"Could not get summary for {actual_metric}: {e}")
+                
+                # Get classifiers for this metric
+                try:
+                    classifiers_response = mistapi.api.v1.sites.sle.listSiteSleMetricClassifiers(
+                        session,
+                        site_id,
+                        scope="site",
+                        scope_id=site_id,
+                        metric=actual_metric
+                    )
+                    classifiers_data = classifiers_response.data if hasattr(classifiers_response, "data") else classifiers_response
+                    raw_classifiers = classifiers_data.get("classifiers", []) if isinstance(classifiers_data, dict) else []
+                    
+                    # Get details for each classifier
+                    for clf in raw_classifiers:
+                        clf_name = clf if isinstance(clf, str) else clf.get("name", str(clf))
+                        
+                        try:
+                            clf_details = mistapi.api.v1.sites.sle.getSiteSleClassifierDetails(
+                                session,
+                                site_id,
+                                scope="site",
+                                scope_id=site_id,
+                                metric=actual_metric,
+                                classifier=clf_name,
+                                duration=duration
+                            )
+                            clf_data = clf_details.data if hasattr(clf_details, "data") else clf_details
+                            
+                            classifier_info = {
+                                "name": clf_name,
+                                "impact": clf_data.get("impact", {}) if isinstance(clf_data, dict) else {},
+                                "samples": clf_data.get("samples", {}) if isinstance(clf_data, dict) else {}
+                            }
+                            metric_data["classifiers"].append(classifier_info)
+                        except Exception as clf_error:
+                            logger.debug(f"Could not get classifier details for {clf_name}: {clf_error}")
+                            metric_data["classifiers"].append({"name": clf_name, "impact": {}, "samples": {}})
+                    
+                except Exception as e:
+                    logger.debug(f"Could not get classifiers for {actual_metric}: {e}")
+                
+                # Get impact summary
+                try:
+                    impact_response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(
+                        session,
+                        site_id,
+                        scope="site",
+                        scope_id=site_id,
+                        metric=actual_metric,
+                        duration=duration
+                    )
+                    impact_data = impact_response.data if hasattr(impact_response, "data") else impact_response
+                    metric_data["impact"] = impact_data if isinstance(impact_data, dict) else {}
+                except Exception as e:
+                    logger.debug(f"Could not get impact for {actual_metric}: {e}")
+                
+                result["metrics"][metric] = metric_data
+            
+            return result
+            
+        except Exception as error:
+            logger.error(f"Error fetching SLE details for {category}: {error}")
+            raise
+    
     def get_site_devices(self, site_id: str, device_type: str = "all") -> List[Dict[str, Any]]:
         """Get detailed device information for a site."""
         try:

@@ -33,6 +33,10 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
   - Collapsible metric sections with average scores
   - Configurable time ranges (5 min, 1 hour, today, 24 hours, 7 days)
   - Color-coded thresholds (green/yellow/red)
+  - **Detailed SLE Pages**: Click "Details" to view classifier breakdowns
+    - Per-metric classifier analysis with impact events and duration
+    - Impact visualization bars for quick problem identification
+    - Export all classifier data to CSV
 - **Access Point Details**:
   - Connected WiFi clients per AP
   - Currently broadcasting SSIDs (resolved via device profiles)
