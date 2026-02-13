@@ -83,3 +83,7 @@ config/logs/
 
 # Local config
 config/
+
+# API documentation (contains example secrets that trigger push protection)
+docs/mist-api-openapi*.json
+docs/mist-api-openapi*.yaml*
