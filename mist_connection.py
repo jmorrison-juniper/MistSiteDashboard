@@ -830,6 +830,110 @@ class MistConnection:
             logger.error(f"Error fetching SLE impact summary for {metric}: {error}")
             return {}
     
+    def get_sle_impacted_items(
+        self,
+        site_id: str,
+        metric: str,
+        item_type: str,
+        duration: str = "1d",
+        classifier: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get detailed impacted items (Distribution/Affected Items) for an SLE metric.
+        
+        Retrieves rich distribution data showing which gateways, interfaces,
+        applications, or clients are affected by SLE degradation. This matches
+        the data shown in Mist dashboard's Distribution and Affected Items tabs.
+        
+        Args:
+            site_id: The site ID
+            metric: SLE metric name (e.g., 'wan-link-health', 'gateway-health')
+            item_type: Type of impacted items to retrieve. Valid values:
+                - 'gateways': WAN Edges with failure rates
+                - 'interfaces': Gateway interfaces with failure rates
+                - 'applications': Applications with failure rates
+                - 'clients': Wired clients affected
+                - 'wireless_clients': Wireless clients affected
+            duration: Time range ('1d', '7d', '2w')
+            classifier: Optional classifier filter (e.g., 'network-latency')
+        
+        Returns:
+            dict: Contains metadata and items list with failure rates:
+            {
+                "total_count": 12,
+                "items": [
+                    {"name": "ge-0/0/1", "degraded": 100, "total": 500, "failure_rate": 20.0, ...}
+                ]
+            }
+        """
+        try:
+            session = self._get_session()
+            
+            # Build kwargs for API call
+            base_kwargs: Dict[str, Any] = {
+                "mist_session": session,
+                "site_id": site_id,
+                "scope": "site",
+                "scope_id": site_id,
+                "metric": metric,
+                "duration": duration
+            }
+            if classifier:
+                base_kwargs["classifier"] = classifier
+            
+            # Map item_type to appropriate API function and response key
+            api_map = {
+                "gateways": (mistapi.api.v1.sites.sle.listSiteSleImpactedGateways, "gateways"),
+                "interfaces": (mistapi.api.v1.sites.sle.listSiteSleImpactedInterfaces, "interfaces"),
+                "applications": (mistapi.api.v1.sites.sle.listSiteSleImpactedApplications, "apps"),
+                "clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWiredClients, "clients"),
+                "wireless_clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWirelessClients, "clients"),
+            }
+            
+            if item_type not in api_map:
+                return {"total_count": 0, "items": [], "error": f"Invalid item_type: {item_type}"}
+            
+            api_func, response_key = api_map[item_type]
+            response = api_func(**base_kwargs)
+            data = response.data if hasattr(response, "data") else response
+            
+            if not isinstance(data, dict):
+                return {"total_count": 0, "items": []}
+            
+            raw_items = data.get(response_key, [])
+            total_count = data.get("total_count", len(raw_items))
+            
+            # Calculate failure rate and overall impact for each item
+            total_degraded_all = sum(item.get("degraded", 0) for item in raw_items)
+            
+            items = []
+            for item in raw_items:
+                degraded = item.get("degraded", 0)
+                total = item.get("total", 0)
+                failure_rate = round((degraded / total) * 100, 1) if total > 0 else 0
+                overall_impact = round((degraded / total_degraded_all) * 100, 1) if total_degraded_all > 0 else 0
+                
+                processed_item = {
+                    **item,
+                    "failure_rate": failure_rate,
+                    "overall_impact": overall_impact
+                }
+                items.append(processed_item)
+            
+            # Sort by overall_impact descending (most impactful first)
+            items.sort(key=lambda x: x.get("overall_impact", 0), reverse=True)
+            
+            return {
+                "total_count": total_count,
+                "metric": metric,
+                "classifier": classifier or "",
+                "items": items
+            }
+            
+        except Exception as error:
+            logger.error(f"Error fetching impacted {item_type} for {metric}: {error}")
+            return {"total_count": 0, "items": [], "error": str(error)}
+    
     def get_sle_details(self, site_id: str, category: str, duration: str = "1d") -> Dict[str, Any]:
         """
         Get comprehensive SLE details for a category (wifi, wired, or wan).

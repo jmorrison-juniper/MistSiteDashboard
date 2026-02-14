@@ -651,7 +651,7 @@
             URL.revokeObjectURL(url);
         }
 
-        // Show impact details modal for a classifier
+        // Show impact details modal for a classifier - use new impacted items API
         async function showImpactDetails(metric, classifier, classifierDisplayName) {
             const modal = new bootstrap.Modal(document.getElementById('impactModal'));
             document.getElementById('impactModalLabel').textContent = `${classifierDisplayName} - Affected Devices`;
@@ -667,10 +667,28 @@
             
             try {
                 const duration = document.getElementById('durationSelect').value;
-                const response = await fetch(`/api/sites/${siteId}/sle/impact/${metric}/${classifier}?duration=${duration}`);
-                const data = await response.json();
                 
-                renderImpactDetails(data);
+                // Fetch all impacted item types in parallel
+                const [gatewaysRes, interfacesRes, applicationsRes, clientsRes] = await Promise.all([
+                    fetch(`/api/sites/${siteId}/sle/${metric}/impacted/gateways?duration=${duration}&classifier=${classifier}`),
+                    fetch(`/api/sites/${siteId}/sle/${metric}/impacted/interfaces?duration=${duration}&classifier=${classifier}`),
+                    fetch(`/api/sites/${siteId}/sle/${metric}/impacted/applications?duration=${duration}&classifier=${classifier}`),
+                    fetch(`/api/sites/${siteId}/sle/${metric}/impacted/clients?duration=${duration}&classifier=${classifier}`)
+                ]);
+                
+                const [gateways, interfaces, applications, clients] = await Promise.all([
+                    gatewaysRes.json(),
+                    interfacesRes.json(),
+                    applicationsRes.json(),
+                    clientsRes.json()
+                ]);
+                
+                renderImpactDetailsTabs({
+                    gateways: gateways.items || [],
+                    interfaces: interfaces.items || [],
+                    applications: applications.items || [],
+                    clients: clients.items || []
+                });
             } catch (error) {
                 console.error('Error fetching impact details:', error);
                 document.getElementById('impactModalBody').innerHTML = `
@@ -679,45 +697,35 @@
             }
         }
         
-        function renderImpactDetails(data) {
-            const aps = data.aps || [];
-            const wlans = data.wlans || [];
-            const deviceTypes = data.device_types || [];
-            const deviceOs = data.device_os || [];
-            const bands = data.bands || [];
+        function renderImpactDetailsTabs(data) {
+            const { gateways, interfaces, applications, clients } = data;
             
             // Build tabs based on available data
             let tabsHtml = '<ul class="nav nav-tabs" role="tablist">';
             let contentHtml = '<div class="tab-content mt-3">';
             let firstTab = true;
             
-            if (aps.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#apsTab">Gateways (${aps.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">${renderImpactTable(aps, 'name', 'Gateway Name')}</div>`;
+            if (gateways.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#gatewaysTab">WAN Edges (${gateways.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="gatewaysTab">${renderGatewaysTable(gateways)}</div>`;
                 firstTab = false;
             }
             
-            if (wlans.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#wlansTab">WAN Links (${wlans.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">${renderImpactTable(wlans, 'name', 'WAN Link')}</div>`;
+            if (interfaces.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#interfacesTab">Interfaces (${interfaces.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="interfacesTab">${renderInterfacesTable(interfaces)}</div>`;
                 firstTab = false;
             }
             
-            if (deviceTypes.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceTypesTab">Link Types (${deviceTypes.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">${renderImpactTable(deviceTypes, 'name', 'Link Type')}</div>`;
+            if (applications.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#applicationsTab">Applications (${applications.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="applicationsTab">${renderApplicationsTable(applications)}</div>`;
                 firstTab = false;
             }
             
-            if (deviceOs.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceOsTab">Applications (${deviceOs.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">${renderImpactTable(deviceOs, 'name', 'Application')}</div>`;
-                firstTab = false;
-            }
-            
-            if (bands.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#bandsTab">Paths (${bands.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">${renderImpactTable(bands, 'band', 'Path')}</div>`;
+            if (clients.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#clientsTab">Clients (${clients.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">${renderClientsTable(clients)}</div>`;
                 firstTab = false;
             }
             
@@ -737,40 +745,109 @@
             }
         }
         
-        function renderImpactTable(items, nameKey, nameLabel) {
+        function renderGatewaysTable(items) {
             let html = `
                 <table class="table table-dark table-sm impact-detail-table">
-                    <thead>
-                        <tr>
-                            <th>${nameLabel}</th>
-                            <th>Degraded</th>
-                            <th>Total</th>
-                            <th>Impact %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    <thead><tr>
+                        <th>WAN Edge Name</th>
+                        <th>MAC</th>
+                        <th>Model</th>
+                        <th>Version</th>
+                        <th>Overall Impact</th>
+                        <th>Failure Rate</th>
+                    </tr></thead><tbody>
             `;
-            
             items.forEach(item => {
-                const name = item[nameKey] || 'Unknown';
-                const degraded = item.degraded || 0;
-                const total = item.total || 0;
-                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
-                
-                let pctClass = 'low';
-                if (pct >= 10) pctClass = 'high';
-                else if (pct >= 5) pctClass = 'medium';
-                
-                html += `
-                    <tr>
-                        <td>${name}</td>
-                        <td>${degraded.toLocaleString()}</td>
-                        <td>${total.toLocaleString()}</td>
-                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
-                    </tr>
-                `;
+                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
+                html += `<tr>
+                    <td>${item.name || 'Unknown'}</td>
+                    <td><code>${item.gateway_mac || '-'}</code></td>
+                    <td>${item.gateway_model || '-'}</td>
+                    <td>${item.gateway_version || '-'}</td>
+                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
+                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
+                </tr>`;
             });
-            
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        function renderInterfacesTable(items) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead><tr>
+                        <th>Interface Name</th>
+                        <th>Gateway</th>
+                        <th>Gateway MAC</th>
+                        <th>Overall Impact</th>
+                        <th>Failure Rate</th>
+                    </tr></thead><tbody>
+            `;
+            items.forEach(item => {
+                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
+                html += `<tr>
+                    <td>${item.interface_name || 'Unknown'}</td>
+                    <td>${item.gateway_name || '-'}</td>
+                    <td><code>${item.gateway_mac || '-'}</code></td>
+                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
+                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        function renderApplicationsTable(items) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead><tr>
+                        <th>Application</th>
+                        <th>Degraded</th>
+                        <th>Total</th>
+                        <th>Overall Impact</th>
+                        <th>Failure Rate</th>
+                    </tr></thead><tbody>
+            `;
+            items.forEach(item => {
+                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
+                html += `<tr>
+                    <td>${item.name || item.app || 'Unknown'}</td>
+                    <td>${item.degraded?.toLocaleString() || 0}</td>
+                    <td>${item.total?.toLocaleString() || 0}</td>
+                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
+                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        function renderClientsTable(items) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead><tr>
+                        <th>Name/IP</th>
+                        <th>MAC</th>
+                        <th>Gateway</th>
+                        <th>Interfaces</th>
+                        <th>Overall Impact</th>
+                        <th>Failure Rate</th>
+                    </tr></thead><tbody>
+            `;
+            items.forEach(item => {
+                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
+                const name = item.name || item.src_ip || 'Unknown';
+                const gwList = (item.gateways || []).map(g => g.gateway_name).join(', ') || '-';
+                const ifList = (item.gateways || []).flatMap(g => g.interfaces || []).join(', ') || '-';
+                html += `<tr>
+                    <td>${name}</td>
+                    <td><code>${item.mac || '-'}</code></td>
+                    <td>${gwList}</td>
+                    <td>${ifList}</td>
+                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
+                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
+                </tr>`;
+            });
             html += '</tbody></table>';
             return html;
         }

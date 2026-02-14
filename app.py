@@ -790,6 +790,68 @@ def get_classifier_impact(site_id, metric, classifier):
         return jsonify({"error": str(error)}), 500
 
 
+@app.route("/api/sites/<site_id>/sle/<metric>/impacted/<item_type>", methods=["GET"])
+def get_sle_impacted_items(site_id, metric, item_type):
+    """
+    Get detailed impacted items (Distribution/Affected Items) for an SLE metric.
+    
+    Retrieves rich distribution data showing which gateways, interfaces,
+    applications, or clients are affected by SLE degradation. Matches the
+    Distribution and Affected Items tabs in Mist dashboard.
+    
+    Args:
+        site_id: UUID of the site to query
+        metric: SLE metric name (e.g., 'wan-link-health', 'gateway-health')
+        item_type: Type of impacted items. Valid values:
+            - 'gateways': WAN Edges with failure rates
+            - 'interfaces': Gateway interfaces with failure rates
+            - 'applications': Applications with failure rates
+            - 'clients': Wired clients affected
+            - 'wireless_clients': Wireless clients affected
+        
+    Query Parameters:
+        duration: Time range (default: "1d"). Valid: "1d", "7d", "2w"
+        classifier: Optional classifier filter (e.g., "network-latency")
+        
+    Returns:
+        JSON: {
+            "total_count": int,
+            "metric": str,
+            "classifier": str,
+            "items": [
+                {
+                    "name": str,
+                    "degraded": int,
+                    "total": int,
+                    "failure_rate": float (0-100),
+                    "overall_impact": float (percentage of total degradation),
+                    ... (additional fields vary by item_type)
+                }, ...
+            ]
+        }
+        
+    Status Codes:
+        200: Impacted items retrieved successfully
+        400: Invalid item_type
+        500: Server error during retrieval
+    """
+    valid_types = ["gateways", "interfaces", "applications", "clients", "wireless_clients"]
+    if item_type not in valid_types:
+        return jsonify({
+            "error": f"Invalid item_type '{item_type}'. Must be one of: {valid_types}"
+        }), 400
+    
+    try:
+        mist = get_mist_connection()
+        duration = request.args.get("duration", "1d")
+        classifier = request.args.get("classifier")
+        data = mist.get_sle_impacted_items(site_id, metric, item_type, duration, classifier)
+        return jsonify(data)
+    except Exception as error:
+        logger.error(f"Error fetching impacted {item_type}: {error}")
+        return jsonify({"error": str(error)}), 500
+
+
 # =============================================================================
 # HEALTH CHECK ENDPOINT - Container Orchestration Support
 # =============================================================================
