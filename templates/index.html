@@ -643,6 +643,51 @@
             transition: width 0.3s ease;
         }
         
+        /* Horizontal SLE cell: percentage + bar on same row */
+        .sle-cell-horizontal {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 120px;
+        }
+        
+        .sle-cell-horizontal .sle-pct {
+            min-width: 50px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        
+        .sle-cell-horizontal .sle-bar-inline {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background-color: rgba(255,255,255,0.1);
+            overflow: hidden;
+            min-width: 40px;
+        }
+        
+        /* Sortable column headers */
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        
+        .sortable-header:hover {
+            background-color: rgba(226, 0, 116, 0.2);
+        }
+        
+        .sortable-header .sort-icon {
+            margin-left: 0.25rem;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        
+        .sortable-header.active .sort-icon {
+            opacity: 1;
+            color: var(--tm-magenta);
+        }
+        
         .org-sle-table .site-name-link {
             color: var(--tm-magenta-light);
             text-decoration: none;
@@ -793,27 +838,35 @@
                 <!-- WiFi Metrics (shown by default) -->
                 <div id="wifiMetrics" class="sle-metrics-row">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card active" data-metric="coverage">Coverage</div>
-                    <div class="sle-metric-card" data-metric="capacity">Capacity</div>
-                    <div class="sle-metric-card" data-metric="throughput">Throughput</div>
-                    <div class="sle-metric-card" data-metric="time-to-connect">Time to Connect</div>
-                    <div class="sle-metric-card" data-metric="roaming">Roaming</div>
+                    <div class="sle-metric-card active" data-metric="time-to-connect">Time to Connect</div>
                     <div class="sle-metric-card" data-metric="successful-connect">Successful Connect</div>
+                    <div class="sle-metric-card" data-metric="coverage">Coverage</div>
+                    <div class="sle-metric-card" data-metric="roaming">Roaming</div>
+                    <div class="sle-metric-card" data-metric="throughput">Throughput</div>
+                    <div class="sle-metric-card" data-metric="capacity">Capacity</div>
                     <div class="sle-metric-card" data-metric="ap-health">AP Health</div>
+                    <div class="ms-auto d-flex align-items-center">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="hideExcludedWlans" checked>
+                            <label class="form-check-label text-secondary small" for="hideExcludedWlans">Hide Excluded WLANs</label>
+                        </div>
+                    </div>
                 </div>
                 <!-- Wired Metrics (hidden by default) -->
                 <div id="wiredMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
                     <div class="sle-metric-card active" data-metric="switch-health">Switch Health</div>
-                    <div class="sle-metric-card" data-metric="switch-throughput">Throughput</div>
                     <div class="sle-metric-card" data-metric="switch-stc">Successful Connect</div>
+                    <div class="sle-metric-card" data-metric="switch-throughput">Throughput</div>
+                    <div class="sle-metric-card" data-metric="switch-bandwidth">Switch Bandwidth</div>
                 </div>
                 <!-- WAN Metrics (hidden by default) -->
                 <div id="wanMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card active" data-metric="gateway-health">Gateway Health</div>
+                    <div class="sle-metric-card active" data-metric="gateway-health">WAN Edge Health</div>
                     <div class="sle-metric-card" data-metric="wan-link-health">WAN Link Health</div>
                     <div class="sle-metric-card" data-metric="application-health">Application Health</div>
+                    <div class="sle-metric-card" data-metric="gateway-bandwidth">Gateway Bandwidth</div>
                 </div>
             </div>
             
@@ -1243,7 +1296,9 @@
         
         // Active state tracking
         let activeCategory = 'wifi';
-        let activeMetric = 'coverage';
+        let activeMetric = 'time-to-connect';
+        let sortColumn = 'time-to-connect';  // Column to sort by
+        let sortDirection = 'asc';    // 'asc' = worst first (low values), 'desc' = best first
         
         // Fetch org-wide SLE data for a specific category
         async function fetchOrgSle(sleType) {
@@ -1274,7 +1329,7 @@
             return null;
         }
         
-        // Format SLE value as percentage with color coding
+        // Format SLE value as percentage with color coding (horizontal layout)
         function formatSleValue(value) {
             if (value === null || value === undefined) {
                 return '<span class="text-secondary">N/A</span>';
@@ -1284,46 +1339,70 @@
             const barClass = colorClass === 'sle-good' ? 'sle-good' : 
                            colorClass === 'sle-warning' ? 'sle-warning' : 'sle-poor';
             return `
-                <div class="sle-cell">
-                    <span class="${colorClass}">${percentage}%</span>
-                    <div class="sle-bar">
+                <div class="sle-cell-horizontal">
+                    <span class="sle-pct ${colorClass}">${percentage}%</span>
+                    <div class="sle-bar-inline">
                         <div class="sle-bar-fill ${barClass}" style="width: ${percentage}%"></div>
                     </div>
                 </div>
             `;
         }
         
-        // Get table header based on category
+        // Get table header based on category with sortable columns
         function getOrgSleTableHeader(category) {
+            function sortableHeader(label, colKey, extraClasses = '') {
+                const isActive = sortColumn === colKey;
+                const icon = isActive ? (sortDirection === 'asc' ? 'bi-sort-up' : 'bi-sort-down') : 'bi-arrow-down-up';
+                const activeClass = isActive ? 'active' : '';
+                return `<th class="sortable-header ${activeClass} ${extraClasses}" data-sort="${colKey}">${label} <i class="bi ${icon} sort-icon"></i></th>`;
+            }
+            
             const headers = {
                 wifi: `<tr>
-                    <th>Site</th>
-                    <th class="text-center d-none d-md-table-cell">APs</th>
-                    <th class="text-center d-none d-sm-table-cell">Clients</th>
-                    <th>Coverage</th>
-                    <th class="d-none d-lg-table-cell">Capacity</th>
-                    <th class="d-none d-lg-table-cell">Throughput</th>
-                    <th class="d-none d-xl-table-cell">Time to Connect</th>
-                    <th class="d-none d-xl-table-cell">Roaming</th>
+                    ${sortableHeader('Site', 'site_name')}
+                    ${sortableHeader('APs', 'num_aps', 'text-center d-none d-md-table-cell')}
+                    ${sortableHeader('Clients', 'num_clients', 'text-center d-none d-sm-table-cell')}
+                    ${sortableHeader('Time to Connect', 'time-to-connect')}
+                    ${sortableHeader('Successful Connect', 'successful-connect', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('Coverage', 'coverage', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('Roaming', 'roaming', 'd-none d-xl-table-cell')}
+                    ${sortableHeader('Throughput', 'throughput', 'd-none d-xl-table-cell')}
+                    ${sortableHeader('Capacity', 'capacity', 'd-none d-xxl-table-cell')}
+                    ${sortableHeader('AP Health', 'ap-health', 'd-none d-xxl-table-cell')}
                 </tr>`,
                 wired: `<tr>
-                    <th>Site</th>
-                    <th class="text-center d-none d-md-table-cell">Switches</th>
-                    <th class="text-center d-none d-sm-table-cell">Clients</th>
-                    <th>Switch Health</th>
-                    <th>Throughput</th>
-                    <th class="d-none d-lg-table-cell">Successful Connect</th>
+                    ${sortableHeader('Site', 'site_name')}
+                    ${sortableHeader('Switches', 'num_switches', 'text-center d-none d-md-table-cell')}
+                    ${sortableHeader('Clients', 'num_clients', 'text-center d-none d-sm-table-cell')}
+                    ${sortableHeader('Switch Health', 'switch-health')}
+                    ${sortableHeader('Successful Connect', 'switch-stc', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('Throughput', 'switch-throughput', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('Bandwidth', 'switch-bandwidth', 'd-none d-xl-table-cell')}
                 </tr>`,
                 wan: `<tr>
-                    <th>Site</th>
-                    <th class="text-center d-none d-md-table-cell">Gateways</th>
-                    <th class="text-center d-none d-sm-table-cell">Clients</th>
-                    <th>Gateway Health</th>
-                    <th>WAN Link</th>
-                    <th class="d-none d-lg-table-cell">App Health</th>
+                    ${sortableHeader('Site', 'site_name')}
+                    ${sortableHeader('Gateways', 'num_gateways', 'text-center d-none d-md-table-cell')}
+                    ${sortableHeader('Clients', 'num_clients', 'text-center d-none d-sm-table-cell')}
+                    ${sortableHeader('WAN Edge Health', 'gateway-health')}
+                    ${sortableHeader('WAN Link Health', 'wan-link-health', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('App Health', 'application-health', 'd-none d-lg-table-cell')}
+                    ${sortableHeader('Bandwidth', 'gateway-bandwidth', 'd-none d-xl-table-cell')}
                 </tr>`
             };
             return headers[category] || headers.wifi;
+        }
+        
+        // Handle column header click for sorting
+        function handleSortClick(colKey) {
+            if (sortColumn === colKey) {
+                // Toggle direction
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New column, default to 'asc' (worst first for SLE metrics)
+                sortColumn = colKey;
+                sortDirection = 'asc';
+            }
+            renderOrgSleTable();
         }
         
         // Render unified org SLE table based on active category and metric
@@ -1335,53 +1414,77 @@
             // Set appropriate header
             thead.innerHTML = getOrgSleTableHeader(activeCategory);
             
+            // Attach click listeners to sortable headers
+            thead.querySelectorAll('.sortable-header').forEach(th => {
+                th.addEventListener('click', () => handleSortClick(th.dataset.sort));
+            });
+            
             if (data.length === 0) {
                 const colspan = activeCategory === 'wifi' ? 8 : 6;
                 tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-secondary py-4">No ${activeCategory.toUpperCase()} SLE data available</td></tr>`;
                 return;
             }
             
-            // Sort by the active metric (worst first)
+            // Sort by current sortColumn
             const sorted = [...data].sort((a, b) => {
-                const valA = getSleValue(a, activeMetric) ?? 1;
-                const valB = getSleValue(b, activeMetric) ?? 1;
-                return valA - valB;
+                let valA, valB;
+                
+                // Handle special columns (non-SLE values)
+                if (sortColumn === 'site_name') {
+                    valA = (a.site_name || '').toLowerCase();
+                    valB = (b.site_name || '').toLowerCase();
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else if (['num_aps', 'num_switches', 'num_gateways', 'num_clients'].includes(sortColumn)) {
+                    valA = a[sortColumn] ?? 0;
+                    valB = b[sortColumn] ?? 0;
+                } else {
+                    // SLE metric columns - use getSleValue
+                    valA = getSleValue(a, sortColumn) ?? (sortDirection === 'asc' ? 999 : -1);
+                    valB = getSleValue(b, sortColumn) ?? (sortDirection === 'asc' ? 999 : -1);
+                }
+                
+                // Numeric comparison
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
             });
             
             // Generate table rows based on category
             if (activeCategory === 'wifi') {
                 tbody.innerHTML = sorted.map(site => `
                     <tr>
-                        <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                        <td><a href="/sites/${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
                         <td class="text-center d-none d-md-table-cell">${site.num_aps || 0}</td>
                         <td class="text-center d-none d-sm-table-cell">${site.num_clients || 0}</td>
-                        <td>${formatSleValue(getSleValue(site, 'coverage'))}</td>
-                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'capacity'))}</td>
-                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'throughput'))}</td>
-                        <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'time-to-connect'))}</td>
+                        <td>${formatSleValue(getSleValue(site, 'time-to-connect'))}</td>
+                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'successful-connect'))}</td>
+                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'coverage'))}</td>
                         <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'roaming'))}</td>
+                        <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'throughput'))}</td>
+                        <td class="d-none d-xxl-table-cell">${formatSleValue(getSleValue(site, 'capacity'))}</td>
+                        <td class="d-none d-xxl-table-cell">${formatSleValue(getSleValue(site, 'ap-health'))}</td>
                     </tr>
                 `).join('');
             } else if (activeCategory === 'wired') {
                 tbody.innerHTML = sorted.map(site => `
                     <tr>
-                        <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                        <td><a href="/sites/${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
                         <td class="text-center d-none d-md-table-cell">${site.num_switches || 0}</td>
                         <td class="text-center d-none d-sm-table-cell">${site.num_clients || 0}</td>
                         <td>${formatSleValue(getSleValue(site, 'switch-health'))}</td>
-                        <td>${formatSleValue(getSleValue(site, 'switch-throughput'))}</td>
                         <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'switch-stc'))}</td>
+                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'switch-throughput'))}</td>
+                        <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'switch-bandwidth'))}</td>
                     </tr>
                 `).join('');
             } else if (activeCategory === 'wan') {
                 tbody.innerHTML = sorted.map(site => `
                     <tr>
-                        <td><a href="?site=${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
+                        <td><a href="/sites/${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
                         <td class="text-center d-none d-md-table-cell">${site.num_gateways || 0}</td>
                         <td class="text-center d-none d-sm-table-cell">${site.num_clients || 0}</td>
                         <td>${formatSleValue(getSleValue(site, 'gateway-health'))}</td>
-                        <td>${formatSleValue(getSleValue(site, 'wan-link-health'))}</td>
+                        <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'wan-link-health'))}</td>
                         <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'application-health'))}</td>
+                        <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'gateway-bandwidth'))}</td>
                     </tr>
                 `).join('');
             }
@@ -1405,8 +1508,10 @@
             document.getElementById('wanMetrics').style.display = category === 'wan' ? 'flex' : 'none';
             
             // Set default metric for new category
-            const defaultMetrics = { wifi: 'coverage', wired: 'switch-health', wan: 'gateway-health' };
+            const defaultMetrics = { wifi: 'time-to-connect', wired: 'switch-health', wan: 'gateway-health' };
             activeMetric = defaultMetrics[category];
+            sortColumn = defaultMetrics[category];  // Sort by default metric
+            sortDirection = 'asc';  // Worst first
             
             // Update metric card visuals
             document.querySelectorAll(`#${category}Metrics .sle-metric-card`).forEach(card => {
@@ -1428,6 +1533,8 @@
         // Switch active metric
         function switchMetric(metric, category) {
             activeMetric = metric;
+            sortColumn = metric;      // Sort by selected metric
+            sortDirection = 'asc';    // Reset to worst first
             
             // Update metric card visuals
             document.querySelectorAll(`#${category}Metrics .sle-metric-card`).forEach(card => {
@@ -1924,23 +2031,8 @@
         siteSelector.addEventListener('change', function() {
             const siteId = this.value;
             if (siteId) {
-                currentSiteId = siteId;
-                const selectedOption = this.options[this.selectedIndex];
-                document.getElementById('siteName').textContent = selectedOption.textContent;
-                document.getElementById('siteAddress').textContent = selectedOption.dataset.address || 'No address';
-                
-                // Update health card links
-                document.getElementById('apHealthLink').href = `/ap-clients/${siteId}`;
-                document.getElementById('switchHealthLink').href = `/switch-clients/${siteId}`;
-                document.getElementById('gatewayHealthLink').href = `/gateway-wan/${siteId}`;
-                
-                loadSiteHealth(siteId);
-            } else {
-                currentSiteId = null;
-                healthSection.style.display = 'none';
-                siteInfo.style.display = 'none';
-                sleTimeRange.style.display = 'none';
-                emptyState.style.display = 'block';
+                // Redirect to site-specific page
+                window.location.href = `/sites/${siteId}`;
             }
         });
 
@@ -1950,34 +2042,12 @@
             return urlParams.get(param);
         }
 
-        // Auto-select site from URL parameter
-        async function autoSelectSiteFromUrl() {
-            const siteIdFromUrl = getUrlParam('site');
-            if (siteIdFromUrl && sites.length > 0) {
-                // Find and select the site in the dropdown
-                const siteExists = sites.some(site => site.id === siteIdFromUrl);
-                if (siteExists) {
-                    siteSelector.value = siteIdFromUrl;
-                    // Trigger change event to load site data
-                    siteSelector.dispatchEvent(new Event('change'));
-                }
-            }
-        }
-
         // Auto-test connection on page load
         document.addEventListener('DOMContentLoaded', async function() {
             // Initialize org SLE event listeners
             initOrgSleListeners();
             
             await testConnection();
-            
-            // Check if we have a site parameter in URL
-            const siteIdFromUrl = getUrlParam('site');
-            if (siteIdFromUrl) {
-                // Auto-load sites and select the one from URL
-                await loadSites();
-                await autoSelectSiteFromUrl();
-            }
         });
     </script>
 </body>

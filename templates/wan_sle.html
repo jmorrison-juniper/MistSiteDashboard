@@ -107,6 +107,28 @@
             border-bottom: 2px solid var(--tm-magenta);
         }
         
+        /* Sortable column headers */
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        
+        .sortable-header:hover {
+            background-color: rgba(226, 0, 116, 0.2);
+        }
+        
+        .sortable-header .sort-icon {
+            margin-left: 0.25rem;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        
+        .sortable-header.active .sort-icon {
+            opacity: 1;
+            color: var(--tm-magenta);
+        }
+        
         .classifier-row:hover {
             background-color: rgba(226, 0, 116, 0.1) !important;
         }
@@ -211,6 +233,14 @@
         
         .summary-card {
             background-color: var(--bg-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .summary-card:hover {
+            background-color: rgba(226, 0, 116, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
         
         .impact-col {
@@ -399,7 +429,7 @@
             }
 
             let html = '';
-            metricNames.forEach(metric => {
+            metricNames.forEach((metric, index) => {
                 const metricData = metrics[metric];
                 const value = metricData.sle_value;
                 const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
@@ -407,7 +437,7 @@
                 
                 html += `
                     <div class="col-md-3 col-sm-6 mb-3">
-                        <div class="text-center p-3 rounded summary-card">
+                        <div class="text-center p-3 rounded summary-card" onclick="scrollToMetric(${index})" title="Click to view details">
                             <div class="text-secondary small mb-1">${displayName}</div>
                             <div class="metric-value ${valueClass}">
                                 ${value !== null ? value.toFixed(1) + '%' : 'N/A'}
@@ -418,6 +448,21 @@
             });
             
             document.getElementById('summaryRow').innerHTML = html;
+        }
+        
+        function scrollToMetric(index) {
+            const collapseId = `metric-${index}`;
+            const collapseElement = document.getElementById(collapseId);
+            const headerElement = collapseElement?.previousElementSibling;
+            
+            if (collapseElement && headerElement) {
+                // Show the collapse if not already visible
+                const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseElement, { toggle: false });
+                bsCollapse.show();
+                
+                // Scroll the header into view
+                headerElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
 
         function renderMetrics(data) {
@@ -472,25 +517,80 @@
             document.getElementById('metricsContainer').innerHTML = html;
         }
 
+        // Sorting state for classifier tables
+        let classifierSortColumn = 'percentage';
+        let classifierSortDirection = 'desc';
+        let currentMetricClassifiers = {};  // Store classifiers by metric for re-sorting
+
+        function sortClassifiers(classifiers, column, direction) {
+            return [...classifiers].sort((a, b) => {
+                let aVal, bVal;
+                if (column === 'name') {
+                    aVal = formatClassifierName(a.name || '').toLowerCase();
+                    bVal = formatClassifierName(b.name || '').toLowerCase();
+                    return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                } else if (column === 'percentage') {
+                    aVal = a.percentage || 0;
+                    bVal = b.percentage || 0;
+                } else if (column === 'affected') {
+                    const aImpact = a.impact || {};
+                    const bImpact = b.impact || {};
+                    aVal = (aImpact.num_gateways || 0) + (aImpact.num_users || 0);
+                    bVal = (bImpact.num_gateways || 0) + (bImpact.num_users || 0);
+                } else {
+                    aVal = a[column] || 0;
+                    bVal = b[column] || 0;
+                }
+                return direction === 'asc' ? aVal - bVal : bVal - aVal;
+            });
+        }
+
+        function handleClassifierSort(metric, column) {
+            if (classifierSortColumn === column) {
+                classifierSortDirection = classifierSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                classifierSortColumn = column;
+                classifierSortDirection = 'desc';
+            }
+            
+            const container = document.querySelector(`#collapse-${metric} .card-body`);
+            if (container && currentMetricClassifiers[metric]) {
+                container.innerHTML = renderClassifiersTable(metric, currentMetricClassifiers[metric]);
+            }
+        }
+
         function renderClassifiersTable(metric, classifiers) {
             if (!classifiers || classifiers.length === 0) {
                 return `<div class="text-center text-secondary py-3">No degradation detected for this metric</div>`;
+            }
+            
+            // Store classifiers for re-sorting
+            currentMetricClassifiers[metric] = classifiers;
+            
+            // Sort classifiers
+            const sortedClassifiers = sortClassifiers(classifiers, classifierSortColumn, classifierSortDirection);
+            
+            function sortableHeader(label, colKey) {
+                const isActive = classifierSortColumn === colKey;
+                const icon = isActive ? (classifierSortDirection === 'asc' ? 'bi-sort-up' : 'bi-sort-down') : 'bi-arrow-down-up';
+                const activeClass = isActive ? 'active' : '';
+                return `<th class="sortable-header ${activeClass}" onclick="handleClassifierSort('${metric}', '${colKey}')">${label} <i class="bi ${icon} sort-icon"></i></th>`;
             }
 
             let html = `
                 <table class="table table-dark classifier-table">
                     <thead>
                         <tr>
-                            <th>Classifier</th>
-                            <th>Contribution</th>
+                            ${sortableHeader('Classifier', 'name')}
+                            ${sortableHeader('Contribution', 'percentage')}
                             <th>Impact Bar</th>
-                            <th>Affected Gateways/Links</th>
+                            ${sortableHeader('Affected Gateways/Links', 'affected')}
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            classifiers.forEach(clf => {
+            sortedClassifiers.forEach(clf => {
                 const clfName = clf.name || 'unknown';
                 const displayName = formatClassifierName(clfName);
                 const percentage = clf.percentage || 0;

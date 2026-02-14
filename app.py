@@ -173,6 +173,25 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/sites/<site_id>")
+def site_page(site_id):
+    """
+    Render the site-specific dashboard page.
+    
+    Displays detailed information for a single site including:
+    - Device health cards (APs, Switches, Gateways)
+    - SLE metric summaries with links to detail pages
+    - Device tables for all device types
+    
+    Args:
+        site_id: UUID of the site
+        
+    Returns:
+        HTML: Rendered site.html template
+    """
+    return render_template("site.html", site_id=site_id)
+
+
 # =============================================================================
 # API ROUTES - JSON Data Endpoints
 # =============================================================================
@@ -321,6 +340,63 @@ def get_org_sle_insights(sle_type):
             
     except Exception as error:
         logger.error(f"Error fetching org SLE insights for {sle_type}: {error}")
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@app.route("/api/org/sle/<sle_type>/metric/<metric>", methods=["GET"])
+def get_org_sle_by_metric(sle_type, metric):
+    """
+    Get org-wide worst sites for a SPECIFIC SLE metric.
+    
+    Uses the worst-sites-by-sle-filtered API endpoint which returns sites
+    sorted by worst performance for a specific metric. This is the correct
+    endpoint for per-metric sorted data.
+    
+    Args:
+        sle_type: SLE category (wifi, wired, wan) - for validation
+        metric: Specific SLE metric name (e.g., time-to-connect, coverage)
+        
+    Query Parameters:
+        duration: Time range (1h, 3h, 6h, 12h, 1d, 7d) - default "1d"
+        
+    Returns:
+        JSON: {
+            "success": bool,
+            "metric": str,
+            "duration": str,
+            "sites": list of site data sorted by worst performers
+        }
+    """
+    try:
+        mist = get_mist_connection()
+        duration = request.args.get("duration", "1d")
+        
+        # Validate metric belongs to the category
+        valid_metrics = {
+            "wifi": ["time-to-connect", "successful-connect", "coverage", "roaming", 
+                     "throughput", "capacity", "ap-health", "ap-availability"],
+            "wired": ["switch-health", "switch-stc", "switch-throughput", "switch-bandwidth"],
+            "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
+        }
+        
+        if sle_type not in valid_metrics:
+            return jsonify({
+                "success": False,
+                "error": f"Invalid sle_type: {sle_type}. Must be wifi, wired, or wan"
+            }), 400
+        
+        # Note: We don't strictly validate metric since API may support more
+        result = mist.get_org_worst_sites_by_metric(metric, duration=duration)
+        
+        if result["success"]:
+            logger.info(f"Retrieved worst sites for metric {metric} (found {len(result['sites'])} sites)")
+            return jsonify(result)
+        else:
+            logger.warning(f"Failed to get worst sites for {metric}: {result.get('error', 'Unknown error')}")
+            return jsonify(result), 500
+            
+    except Exception as error:
+        logger.error(f"Error fetching worst sites for metric {metric}: {error}")
         return jsonify({"success": False, "error": str(error)}), 500
 
 

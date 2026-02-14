@@ -1897,29 +1897,68 @@ class MistConnection:
             
             logger.info(f"Fetching org SLE insights for type '{sle_type}' (duration: {duration})")
             
-            # Fetch all sites for name resolution
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(session, org_id)
+            # Fetch all sites for name resolution (paginate to get all sites)
             site_name_map = {}
-            if sites_response and hasattr(sites_response, "data"):
-                sites_data = sites_response.data or []
-                for site in sites_data:
-                    site_id = site.get("id", "")
-                    site_name = site.get("name", "Unknown Site")
-                    site_name_map[site_id] = site_name
+            page = 1
+            while True:
+                sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
+                    session, org_id, limit=1000, page=page
+                )
+                if sites_response and hasattr(sites_response, "data"):
+                    sites_data = sites_response.data or []
+                    if not sites_data:
+                        break  # No more sites
+                    for site in sites_data:
+                        site_id = site.get("id", "")
+                        site_name = site.get("name", "Unknown Site")
+                        site_name_map[site_id] = site_name
+                    # Check if there are more pages
+                    if len(sites_data) < 1000:
+                        break  # Last page
+                    page += 1
+                else:
+                    break
             
-            # Fetch SLE insights using getOrgSitesSle
-            # API: GET /api/v1/orgs/{org_id}/insights/sites-sle
-            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                session,
-                org_id,
-                sle=sle_type,
-                duration=duration,
-                limit=limit
-            )
+            logger.debug(f"Built site name map with {len(site_name_map)} sites")
+            
+            # Use worst-sites-by-sle endpoint which returns sites sorted by worst performers
+            # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
+            # The sle parameter accepts category names: "wireless", "wired", "wan"
+            # all_sle=true (default) returns all metrics in the category
+            import time
+            end_time = int(time.time())
+            duration_seconds = {
+                "1d": 86400,
+                "7d": 604800,
+                "2w": 1209600
+            }
+            start_time = end_time - duration_seconds.get(duration, 86400)
+            
+            # Map frontend category names to representative metrics
+            # API doesn't accept category names like "wireless" - must use actual metrics
+            # Using all_sle=true (default) returns all metrics in the same category
+            sle_metric_map = {
+                "wifi": "ap-availability",     # Returns all WiFi metrics
+                "wired": "switch-health",      # Returns all wired metrics
+                "wan": "gateway-health"        # Returns all WAN metrics
+            }
+            sle_metric = sle_metric_map.get(sle_type, "ap-availability")
+            
+            # API supports limit param (undocumented, default is 10)
+            uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
+            # mist_get expects query as a separate dict with string values
+            query_params = {
+                "sle": sle_metric,
+                "start": str(start_time),
+                "end": str(end_time),
+                "limit": str(limit)
+            }
+            
+            response = session.mist_get(uri, query=query_params)
             
             sites_list = []
-            if response and hasattr(response, "data"):
-                data = response.data or {}
+            if response and response.status_code == 200:
+                data = response.data if hasattr(response, "data") else {}
                 results = data.get("results", []) if isinstance(data, dict) else data
                 
                 for site_data in results:
@@ -1944,15 +1983,20 @@ class MistConnection:
                             site_entry[key] = value
                     
                     sites_list.append(site_entry)
+            elif response:
+                logger.warning(f"API returned status {response.status_code} for worst-sites-by-sle")
             
-            logger.info(f"Retrieved SLE insights for {len(sites_list)} sites (type: {sle_type})")
+            # Apply client-side limit since API doesn't support limit parameter
+            sites_limited = sites_list[:limit]
+            
+            logger.info(f"Retrieved {len(sites_list)} worst sites, returning top {len(sites_limited)} for category '{sle_type}'")
             
             return {
                 "success": True,
                 "sle_type": sle_type,
                 "duration": duration,
-                "sites": sites_list,
-                "total_sites": len(sites_list)
+                "sites": sites_limited,
+                "total_sites": len(sites_limited)
             }
             
         except Exception as error:
@@ -1960,6 +2004,154 @@ class MistConnection:
             return {
                 "success": False,
                 "sle_type": sle_type,
+                "duration": duration,
+                "sites": [],
+                "error": str(error)
+            }
+
+    def get_org_worst_sites_by_metric(
+        self,
+        metric: str,
+        duration: str = "1d",
+        limit: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Get org-wide worst sites for a SPECIFIC SLE metric.
+        
+        Uses the GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle endpoint
+        with all_sle=false to return sites sorted by worst performance for a 
+        specific metric only.
+        
+        Args:
+            metric: Specific SLE metric name. Examples:
+                WiFi: time-to-connect, successful-connect, coverage, roaming, throughput,
+                      capacity, ap-health, ap-availability
+                Wired: switch-health, switch-stc, switch-throughput, switch-stc-new
+                WAN: gateway-health, wan-link-health
+            duration: Time range for aggregation. Valid values: "1h", "3h", "6h", "12h", "1d", "7d"
+            limit: Maximum number of sites to return (default: 100)
+                
+        Returns:
+            Dict with keys:
+                - success (bool): Whether API call succeeded
+                - metric (str): The requested SLE metric
+                - duration (str): The time range used
+                - sites (list): List of site data sorted by worst performers for this metric
+                - error (str): Error message if success is False
+        """
+        try:
+            session = self._get_session()
+            
+            # Ensure we have an org_id
+            if not self.org_id:
+                test_result = self.test_connection()
+                if not test_result["success"]:
+                    return {
+                        "success": False,
+                        "metric": metric,
+                        "duration": duration,
+                        "sites": [],
+                        "error": "Could not determine organization ID"
+                    }
+            
+            org_id: str = self.org_id or ""
+            
+            logger.info(f"Fetching worst sites by metric '{metric}' (duration: {duration})")
+            
+            # Fetch all sites for name resolution (paginate to get all sites)
+            site_name_map = {}
+            page = 1
+            while True:
+                sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
+                    session, org_id, limit=1000, page=page
+                )
+                if sites_response and hasattr(sites_response, "data"):
+                    sites_data = sites_response.data or []
+                    if not sites_data:
+                        break  # No more sites
+                    for site in sites_data:
+                        site_id = site.get("id", "")
+                        site_name = site.get("name", "Unknown Site")
+                        site_name_map[site_id] = site_name
+                    # Check if there are more pages
+                    if len(sites_data) < 1000:
+                        break  # Last page
+                    page += 1
+                else:
+                    break
+            
+            logger.debug(f"Built site name map with {len(site_name_map)} sites")
+            
+            # Calculate time range
+            import time
+            end_time = int(time.time())
+            duration_seconds = {
+                "1h": 3600,
+                "3h": 10800,
+                "6h": 21600,
+                "12h": 43200,
+                "1d": 86400,
+                "7d": 604800
+            }
+            start_time = end_time - duration_seconds.get(duration, 86400)
+            
+            # Call the worst-sites-by-sle endpoint with all_sle=false for single metric
+            # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
+            # all_sle=false returns only the requested metric, sorted by worst
+            # API supports limit param (undocumented, default is 10)
+            uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
+            # mist_get expects query as a separate dict with string values
+            query_params = {
+                "sle": metric,
+                "start": str(start_time),
+                "end": str(end_time),
+                "all_sle": "false",  # Only return the specified metric
+                "limit": str(limit)
+            }
+            
+            response = session.mist_get(uri, query=query_params)
+            
+            sites_list = []
+            if response and response.status_code == 200:
+                data = response.data if hasattr(response, "data") else {}
+                results = data.get("results", []) if isinstance(data, dict) else data
+                
+                for site_data in results:
+                    site_id = site_data.get("site_id", "")
+                    site_name = site_name_map.get(site_id, "Unknown Site")
+                    
+                    site_entry = {
+                        "site_id": site_id,
+                        "site_name": site_name
+                    }
+                    
+                    # Copy all data from API response
+                    for key, value in site_data.items():
+                        if key != "site_id":
+                            site_entry[key] = value
+                    
+                    sites_list.append(site_entry)
+            elif response:
+                logger.warning(f"API returned status {response.status_code} for worst-sites-by-sle (metric: {metric})")
+            
+            # Apply client-side limit since API doesn't support limit parameter
+            sites_limited = sites_list[:limit]
+            
+            logger.info(f"Retrieved {len(sites_list)} worst sites, returning top {len(sites_limited)} for metric '{metric}'")
+            
+            return {
+                "success": True,
+                "metric": metric,
+                "duration": duration,
+                "sites": sites_limited,
+                "total_sites": len(sites_limited)
+            }
+            
+        except Exception as error:
+            logger.error(f"Error fetching worst sites for metric '{metric}': {error}")
+            return {
+                "success": False,
+                "metric": metric,
                 "duration": duration,
                 "sites": [],
                 "error": str(error)
