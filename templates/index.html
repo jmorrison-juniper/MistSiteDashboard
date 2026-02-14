@@ -1158,7 +1158,7 @@
         let currentSleData = { wifi: null, wired: null, wan: null };
         
         // Org-wide SLE state
-        let orgSleData = { wifi: null, wired: null, wan: null };
+        let orgSleData = { wifi: {}, wired: {}, wan: {} };  // Nested by metric
         let orgSleDuration = '1d';
         
         // SLE metric display names (global for CSV export)
@@ -1300,21 +1300,22 @@
         let sortColumn = 'time-to-connect';  // Column to sort by
         let sortDirection = 'asc';    // 'asc' = worst first (low values), 'desc' = best first
         
-        // Fetch org-wide SLE data for a specific category
-        async function fetchOrgSle(sleType) {
+        // Fetch org-wide SLE data for a specific category and metric
+        async function fetchOrgSleByMetric(category, metric) {
             const duration = document.getElementById('orgSleDuration').value;
             try {
-                const response = await fetch(`/api/org/sle/${sleType}?duration=${duration}`);
+                const response = await fetch(`/api/org/sle/${category}/metric/${metric}?duration=${duration}`);
                 const data = await response.json();
                 if (data.success) {
-                    orgSleData[sleType] = data.sites || [];
+                    if (!orgSleData[category]) orgSleData[category] = {};
+                    orgSleData[category][metric] = data.sites || [];
                     return true;
                 } else {
-                    console.error(`Failed to fetch org ${sleType} SLE:`, data.error);
+                    console.error(`Failed to fetch org ${category} SLE for ${metric}:`, data.error);
                     return false;
                 }
             } catch (error) {
-                console.error(`Error fetching org ${sleType} SLE:`, error);
+                console.error(`Error fetching org ${category} SLE for ${metric}:`, error);
                 return false;
             }
         }
@@ -1409,7 +1410,9 @@
         function renderOrgSleTable() {
             const thead = document.getElementById('orgSleTableHead');
             const tbody = document.getElementById('orgSleTableBody');
-            const data = orgSleData[activeCategory] || [];
+            // Get data for the active category AND metric (each metric has its own worst-100 list)
+            const categoryData = orgSleData[activeCategory] || {};
+            const data = categoryData[activeMetric] || [];
             
             // Set appropriate header
             thead.innerHTML = getOrgSleTableHeader(activeCategory);
@@ -1518,11 +1521,11 @@
                 card.classList.toggle('active', card.dataset.metric === activeMetric);
             });
             
-            // Load data if needed
-            if (!orgSleData[category]) {
+            // Load data for default metric if needed
+            if (!orgSleData[category]?.[activeMetric]) {
                 document.getElementById('orgSleLoading').style.display = 'block';
                 document.getElementById('orgSleContent').style.display = 'none';
-                await fetchOrgSle(category);
+                await fetchOrgSleByMetric(category, activeMetric);
             }
             
             renderOrgSleTable();
@@ -1530,8 +1533,8 @@
             document.getElementById('orgSleContent').style.display = 'block';
         }
         
-        // Switch active metric
-        function switchMetric(metric, category) {
+        // Switch active metric - fetches NEW data from API for this metric
+        async function switchMetric(metric, category) {
             activeMetric = metric;
             sortColumn = metric;      // Sort by selected metric
             sortDirection = 'asc';    // Reset to worst first
@@ -1541,7 +1544,16 @@
                 card.classList.toggle('active', card.dataset.metric === metric);
             });
             
-            // Re-render table with new sort
+            // Fetch data for this specific metric if not cached
+            if (!orgSleData[category] || !orgSleData[category][metric]) {
+                document.getElementById('orgSleLoading').style.display = 'block';
+                document.getElementById('orgSleContent').style.display = 'none';
+                await fetchOrgSleByMetric(category, metric);
+                document.getElementById('orgSleLoading').style.display = 'none';
+                document.getElementById('orgSleContent').style.display = 'block';
+            }
+            
+            // Render table with fetched data
             renderOrgSleTable();
         }
         
@@ -1550,11 +1562,11 @@
             // Show org SLE section
             document.getElementById('orgSleSection').style.display = 'block';
             
-            // Load WiFi by default
+            // Load WiFi with default metric (time-to-connect)
             document.getElementById('orgSleLoading').style.display = 'block';
             document.getElementById('orgSleContent').style.display = 'none';
             
-            const success = await fetchOrgSle('wifi');
+            const success = await fetchOrgSleByMetric('wifi', 'time-to-connect');
             if (success) {
                 renderOrgSleTable();
                 document.getElementById('orgSleLoading').style.display = 'none';
@@ -1583,12 +1595,12 @@
             // Duration change listener
             document.getElementById('orgSleDuration').addEventListener('change', async function() {
                 orgSleDuration = this.value;
-                orgSleData = { wifi: null, wired: null, wan: null };  // Reset cached data
+                orgSleData = { wifi: {}, wired: {}, wan: {} };  // Reset cached data
                 
-                // Reload current category
+                // Reload current category and metric
                 document.getElementById('orgSleLoading').style.display = 'block';
                 document.getElementById('orgSleContent').style.display = 'none';
-                await fetchOrgSle(activeCategory);
+                await fetchOrgSleByMetric(activeCategory, activeMetric);
                 renderOrgSleTable();
                 document.getElementById('orgSleLoading').style.display = 'none';
                 document.getElementById('orgSleContent').style.display = 'block';
@@ -1596,10 +1608,10 @@
             
             // Refresh button listener
             document.getElementById('refreshOrgSle').addEventListener('click', async function() {
-                orgSleData = { wifi: null, wired: null, wan: null };  // Reset cache
+                orgSleData = { wifi: {}, wired: {}, wan: {} };  // Reset cache
                 document.getElementById('orgSleLoading').style.display = 'block';
                 document.getElementById('orgSleContent').style.display = 'none';
-                await fetchOrgSle(activeCategory);
+                await fetchOrgSleByMetric(activeCategory, activeMetric);
                 renderOrgSleTable();
                 document.getElementById('orgSleLoading').style.display = 'none';
                 document.getElementById('orgSleContent').style.display = 'block';
