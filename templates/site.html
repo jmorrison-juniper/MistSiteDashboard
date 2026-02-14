@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Dashboard - {{ site_id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --tm-magenta: #E20074;
+            --tm-magenta-dark: #B8005D;
+            --tm-magenta-light: #FF3399;
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2D2D2D;
+            --bg-card: #3D3D3D;
+            --bg-card-header: #4A4A4A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --accent-green: #00C853;
+            --accent-red: #FF5252;
+            --accent-yellow: #FFD600;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--tm-magenta) 0%, var(--tm-magenta-dark) 100%) !important;
+            box-shadow: 0 2px 10px rgba(226, 0, 116, 0.3);
+        }
+        
+        .navbar-brand {
+            color: var(--text-primary) !important;
+            font-weight: 700;
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+        }
+        
+        .card-header {
+            background-color: var(--bg-card-header);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .health-card {
+            text-align: center;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .health-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(226, 0, 116, 0.3);
+            border-color: var(--tm-magenta);
+        }
+        
+        .health-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .health-count {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .health-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .health-status {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        
+        .status-connected { color: var(--accent-green); }
+        .status-disconnected { color: var(--accent-red); }
+        
+        .sle-card {
+            text-align: center;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .sle-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(226, 0, 116, 0.3);
+            border-color: var(--tm-magenta);
+        }
+        
+        .sle-card .sle-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .sle-card .sle-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .sle-card .sle-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        
+        .sle-good { color: var(--accent-green); }
+        .sle-warning { color: var(--accent-yellow); }
+        .sle-poor { color: var(--accent-red); }
+        
+        .table-dark {
+            --bs-table-bg: var(--bg-card);
+            --bs-table-border-color: rgba(255,255,255,0.1);
+        }
+        
+        .table-dark thead th {
+            background-color: var(--bg-card-header);
+            font-weight: 600;
+            border-bottom: 2px solid var(--tm-magenta);
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.connected {
+            background-color: rgba(0, 210, 106, 0.2);
+            color: var(--accent-green);
+        }
+        
+        .status-badge.disconnected {
+            background-color: rgba(255, 107, 107, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .ssid-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            margin: 0.1rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            background-color: rgba(226, 0, 116, 0.2);
+            color: var(--tm-magenta-light);
+        }
+        
+        .btn-csv-download {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        .btn-csv-download:hover {
+            background: rgba(226, 0, 116, 0.2);
+            border-color: var(--tm-magenta);
+            color: var(--text-primary);
+        }
+        
+        .loading-spinner {
+            display: none;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        .breadcrumb {
+            background: transparent;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .breadcrumb-item a {
+            color: var(--tm-magenta-light);
+            text-decoration: none;
+        }
+        
+        .breadcrumb-item a:hover {
+            color: var(--tm-magenta);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-router me-2"></i>Mist Site Dashboard
+            </a>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/"><i class="bi bi-house me-1"></i>Dashboard</a></li>
+                <li class="breadcrumb-item active" id="siteBreadcrumb">Loading...</li>
+            </ol>
+        </nav>
+        
+        <!-- Site Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h2 id="siteName" class="mb-1"><span class="loading-spinner spinner-border spinner-border-sm"></span> Loading site...</h2>
+                <p id="siteAddress" class="text-secondary mb-0">-</p>
+            </div>
+        </div>
+        
+        <!-- Device Health Cards -->
+        <h5 class="mb-3"><i class="bi bi-heart-pulse me-2"></i>Device Health</h5>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <a href="/ap-clients/{{ site_id }}" class="text-decoration-none">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-wifi" style="color: var(--tm-magenta);"></i></div>
+                        <div class="health-count" id="apCount">-</div>
+                        <div class="health-label">Access Points</div>
+                        <div class="health-status">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="apConnected">0</span></span>
+                            <span class="mx-1">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="apDisconnected">0</span></span>
+                        </div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Clients</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4 mb-3">
+                <a href="/switch-clients/{{ site_id }}" class="text-decoration-none">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-hdd-stack" style="color: var(--accent-yellow);"></i></div>
+                        <div class="health-count" id="switchCount">-</div>
+                        <div class="health-label">Switches</div>
+                        <div class="health-status">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="switchConnected">0</span></span>
+                            <span class="mx-1">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="switchDisconnected">0</span></span>
+                        </div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Clients</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4 mb-3">
+                <a href="/gateway-wan/{{ site_id }}" class="text-decoration-none">
+                    <div class="card health-card">
+                        <div class="health-icon"><i class="bi bi-router" style="color: var(--accent-green);"></i></div>
+                        <div class="health-count" id="gatewayCount">-</div>
+                        <div class="health-label">Gateways</div>
+                        <div class="health-status">
+                            <span class="status-connected"><i class="bi bi-check-circle me-1"></i><span id="gatewayConnected">0</span></span>
+                            <span class="mx-1">|</span>
+                            <span class="status-disconnected"><i class="bi bi-x-circle me-1"></i><span id="gatewayDisconnected">0</span></span>
+                        </div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View WAN</small>
+                    </div>
+                </a>
+            </div>
+        </div>
+        
+        <!-- SLE Summary Cards -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>SLE Metrics</h5>
+            <select id="durationSelector" class="form-select form-select-sm" style="width: auto; background-color: var(--bg-card); color: var(--text-primary); border-color: rgba(255,255,255,0.2);">
+                <option value="1h">Last 1 Hour</option>
+                <option value="3h">Last 3 Hours</option>
+                <option value="6h">Last 6 Hours</option>
+                <option value="12h">Last 12 Hours</option>
+                <option value="1d" selected>Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+            </select>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <a href="/sle/wifi/{{ site_id }}" class="text-decoration-none">
+                    <div class="card sle-card">
+                        <div class="sle-icon"><i class="bi bi-wifi" style="color: var(--tm-magenta);"></i></div>
+                        <div class="sle-value" id="wifiSle">-</div>
+                        <div class="sle-label">WiFi SLE</div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4 mb-3">
+                <a href="/sle/wired/{{ site_id }}" class="text-decoration-none">
+                    <div class="card sle-card">
+                        <div class="sle-icon"><i class="bi bi-ethernet" style="color: var(--tm-magenta-light);"></i></div>
+                        <div class="sle-value" id="wiredSle">-</div>
+                        <div class="sle-label">Wired SLE</div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4 mb-3">
+                <a href="/sle/wan/{{ site_id }}" class="text-decoration-none">
+                    <div class="card sle-card">
+                        <div class="sle-icon"><i class="bi bi-globe" style="color: var(--tm-magenta);"></i></div>
+                        <div class="sle-value" id="wanSle">-</div>
+                        <div class="sle-label">WAN SLE</div>
+                        <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
+                    </div>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Access Points Table -->
+        <h5 class="mb-3"><i class="bi bi-wifi me-2" style="color: var(--tm-magenta);"></i>Access Points</h5>
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-ul me-2"></i>AP Devices</span>
+                <button class="btn btn-csv-download" onclick="downloadTableAsCSV('apsTable', 'access_points.csv')">
+                    <i class="bi bi-download"></i> CSV
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>SSIDs</th>
+                                <th class="d-none d-md-table-cell">Clients</th>
+                                <th class="d-none d-lg-table-cell">Port Speed</th>
+                                <th class="d-none d-lg-table-cell">Power</th>
+                                <th class="d-none d-xl-table-cell">Uptime</th>
+                                <th class="d-none d-xl-table-cell">Serial</th>
+                            </tr>
+                        </thead>
+                        <tbody id="apsTable">
+                            <tr><td colspan="8" class="text-center text-secondary py-3">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Switches Table -->
+        <h5 class="mb-3"><i class="bi bi-hdd-stack me-2" style="color: var(--accent-yellow);"></i>Switches</h5>
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-ul me-2"></i>Switch Devices</span>
+                <button class="btn btn-csv-download" onclick="downloadTableAsCSV('switchesTable', 'switches.csv')">
+                    <i class="bi bi-download"></i> CSV
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Model</th>
+                                <th class="d-none d-md-table-cell">Clients</th>
+                                <th class="d-none d-lg-table-cell">Uptime</th>
+                                <th class="d-none d-xl-table-cell">Serial</th>
+                            </tr>
+                        </thead>
+                        <tbody id="switchesTable">
+                            <tr><td colspan="6" class="text-center text-secondary py-3">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gateways Table -->
+        <h5 class="mb-3"><i class="bi bi-router me-2" style="color: var(--accent-green);"></i>Gateways</h5>
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-ul me-2"></i>Gateway Devices</span>
+                <button class="btn btn-csv-download" onclick="downloadTableAsCSV('gatewaysTable', 'gateways.csv')">
+                    <i class="bi bi-download"></i> CSV
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Model</th>
+                                <th class="d-none d-md-table-cell">WAN Uplinks</th>
+                                <th class="d-none d-lg-table-cell">Uptime</th>
+                                <th class="d-none d-xl-table-cell">Serial</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gatewaysTable">
+                            <tr><td colspan="6" class="text-center text-secondary py-3">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const siteId = '{{ site_id }}';
+        
+        // Load site info and health data on page load
+        async function loadSiteData() {
+            try {
+                // Fetch site health and site info in parallel
+                const [healthRes, sitesRes] = await Promise.all([
+                    fetch(`/api/sites/${siteId}/health`),
+                    fetch('/api/sites')
+                ]);
+                const healthData = await healthRes.json();
+                const sitesData = await sitesRes.json();
+                
+                // Find site info from sites list
+                const site = (sitesData.sites || []).find(s => s.id === siteId);
+                if (site) {
+                    document.getElementById('siteName').textContent = site.name || 'Unknown Site';
+                    document.getElementById('siteBreadcrumb').textContent = site.name || siteId;
+                    document.getElementById('siteAddress').textContent = site.address || 'No address';
+                } else {
+                    document.getElementById('siteName').textContent = 'Site';
+                    document.getElementById('siteBreadcrumb').textContent = siteId;
+                }
+                
+                // Access nested health data
+                const health = healthData.health || {};
+                const aps = health.aps || { total: 0, connected: 0, disconnected: 0 };
+                const switches = health.switches || { total: 0, connected: 0, disconnected: 0 };
+                const gateways = health.gateways || { total: 0, connected: 0, disconnected: 0 };
+                
+                document.getElementById('apCount').textContent = aps.total;
+                document.getElementById('apConnected').textContent = aps.connected;
+                document.getElementById('apDisconnected').textContent = aps.disconnected;
+                
+                document.getElementById('switchCount').textContent = switches.total;
+                document.getElementById('switchConnected').textContent = switches.connected;
+                document.getElementById('switchDisconnected').textContent = switches.disconnected;
+                
+                document.getElementById('gatewayCount').textContent = gateways.total;
+                document.getElementById('gatewayConnected').textContent = gateways.connected;
+                document.getElementById('gatewayDisconnected').textContent = gateways.disconnected;
+                
+            } catch (error) {
+                console.error('Error loading site health:', error);
+            }
+        }
+        
+        // Load SLE summary
+        async function loadSleSummary() {
+            const duration = document.getElementById('durationSelector').value;
+            try {
+                const [wifiRes, wiredRes, wanRes] = await Promise.all([
+                    fetch(`/api/sites/${siteId}/sle/wifi?duration=${duration}`),
+                    fetch(`/api/sites/${siteId}/sle/wired?duration=${duration}`),
+                    fetch(`/api/sites/${siteId}/sle/wan?duration=${duration}`)
+                ]);
+                
+                const [wifi, wired, wan] = await Promise.all([
+                    wifiRes.json(),
+                    wiredRes.json(),
+                    wanRes.json()
+                ]);
+                
+                // Calculate averages
+                const wifiAvg = calculateSleAverage(wifi.metrics);
+                const wiredAvg = calculateSleAverage(wired.metrics);
+                const wanAvg = calculateSleAverage(wan.metrics);
+                
+                updateSleDisplay('wifiSle', wifiAvg);
+                updateSleDisplay('wiredSle', wiredAvg);
+                updateSleDisplay('wanSle', wanAvg);
+                
+            } catch (error) {
+                console.error('Error loading SLE summary:', error);
+            }
+        }
+        
+        function calculateSleAverage(metrics) {
+            if (!metrics || Object.keys(metrics).length === 0) return null;
+            // Extract sle_value from each metric object
+            const values = Object.values(metrics)
+                .map(m => m.sle_value)
+                .filter(v => v !== null && v !== undefined);
+            if (values.length === 0) return null;
+            return values.reduce((sum, v) => sum + v, 0) / values.length;
+        }
+        
+        function formatUptime(seconds) {
+            if (!seconds || seconds === 0) return '-';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m`;
+        }
+        
+        function updateSleDisplay(elementId, value) {
+            const el = document.getElementById(elementId);
+            if (value === null) {
+                el.textContent = 'N/A';
+                el.className = 'sle-value text-secondary';
+            } else {
+                el.textContent = value.toFixed(1) + '%';
+                el.className = 'sle-value ' + (value >= 80 ? 'sle-good' : value >= 50 ? 'sle-warning' : 'sle-poor');
+            }
+        }
+        
+        // Load device lists from health data (has richer device details)
+        async function loadDevices() {
+            try {
+                const res = await fetch(`/api/sites/${siteId}/health`);
+                const data = await res.json();
+                
+                // Extract device lists from health data
+                const health = data.health || {};
+                const aps = (health.aps && health.aps.devices) || [];
+                const switches = (health.switches && health.switches.devices) || [];
+                const gateways = (health.gateways && health.gateways.devices) || [];
+                
+                renderApsTable(aps);
+                renderSwitchesTable(switches);
+                renderGatewaysTable(gateways);
+                
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+        
+        function renderApsTable(aps) {
+            const tbody = document.getElementById('apsTable');
+            if (aps.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary py-3">No access points found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = aps.map(ap => `
+                <tr>
+                    <td>${ap.name || 'Unnamed'}</td>
+                    <td><span class="status-badge ${ap.status === 'connected' ? 'connected' : 'disconnected'}">${ap.status}</span></td>
+                    <td>${(ap.ssids || []).map(s => `<span class="ssid-badge">${s}</span>`).join('') || '-'}</td>
+                    <td class="d-none d-md-table-cell">${ap.num_clients || 0}</td>
+                    <td class="d-none d-lg-table-cell">${ap.port_speed ? ap.port_speed + ' Mbps' : '-'}</td>
+                    <td class="d-none d-lg-table-cell">${ap.power_src || '-'}</td>
+                    <td class="d-none d-xl-table-cell">${formatUptime(ap.uptime)}</td>
+                    <td class="d-none d-xl-table-cell"><code>${ap.serial || '-'}</code></td>
+                </tr>
+            `).join('');
+        }
+        
+        function renderSwitchesTable(switches) {
+            const tbody = document.getElementById('switchesTable');
+            if (switches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-3">No switches found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = switches.map(sw => `
+                <tr>
+                    <td>${sw.name || 'Unnamed'}</td>
+                    <td><span class="status-badge ${sw.status === 'connected' ? 'connected' : 'disconnected'}">${sw.status}</span></td>
+                    <td>${sw.model || '-'}</td>
+                    <td class="d-none d-md-table-cell">${(sw.num_wired_clients || 0)}</td>
+                    <td class="d-none d-lg-table-cell">${formatUptime(sw.uptime)}</td>
+                    <td class="d-none d-xl-table-cell"><code>${sw.serial || '-'}</code></td>
+                </tr>
+            `).join('');
+        }
+        
+        function renderGatewaysTable(gateways) {
+            const tbody = document.getElementById('gatewaysTable');
+            if (gateways.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-3">No gateways found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = gateways.map(gw => `
+                <tr>
+                    <td>${gw.name || 'Unnamed'}</td>
+                    <td><span class="status-badge ${gw.status === 'connected' ? 'connected' : 'disconnected'}">${gw.status}</span></td>
+                    <td>${gw.model || '-'}</td>
+                    <td class="d-none d-md-table-cell">-</td>
+                    <td class="d-none d-lg-table-cell">${formatUptime(gw.uptime)}</td>
+                    <td class="d-none d-xl-table-cell"><code>${gw.serial || '-'}</code></td>
+                </tr>
+            `).join('');
+        }
+        
+        // CSV download helper
+        function downloadTableAsCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            const rows = table.querySelectorAll('tr');
+            const csvContent = [];
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td, th');
+                const rowData = [];
+                cells.forEach(cell => {
+                    let text = cell.innerText.replace(/"/g, '""');
+                    if (text.includes(',') || text.includes('\n')) {
+                        text = `"${text}"`;
+                    }
+                    rowData.push(text);
+                });
+                csvContent.push(rowData.join(','));
+            });
+            
+            const blob = new Blob([csvContent.join('\n')], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Add duration selector listener
+            document.getElementById('durationSelector').addEventListener('change', function() {
+                loadSleSummary();
+            });
+            
+            await Promise.all([
+                loadSiteData(),
+                loadSleSummary(),
+                loadDevices()
+            ]);
+        });
+    </script>
+</body>
+</html>
