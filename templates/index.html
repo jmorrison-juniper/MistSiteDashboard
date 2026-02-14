@@ -855,7 +855,7 @@
                 <!-- Wired Metrics (hidden by default) -->
                 <div id="wiredMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card" data-metric="switch-health">Switch Health</div>
+                    <div class="sle-metric-card" data-metric="switch-health-v2">Switch Health</div>
                     <div class="sle-metric-card active" data-metric="switch-stc">Successful Connect</div>
                     <div class="sle-metric-card" data-metric="switch-throughput">Throughput</div>
                     <div class="sle-metric-card" data-metric="switch-bandwidth">Switch Bandwidth</div>
@@ -1171,7 +1171,7 @@
             'successful-connect': 'Successful Connect',
             'throughput': 'Throughput',
             'time-to-connect': 'Time to Connect',
-            'switch-health': 'Switch Health',
+            'switch-health-v2': 'Switch Health',
             'switch-stc': 'Switch Successful Connect',
             'switch-throughput': 'Switch Throughput',
             'gateway-health': 'Gateway Health',
@@ -1375,7 +1375,7 @@
                     ${sortableHeader('Site', 'site_name')}
                     ${sortableHeader('Switches', 'num_switches', 'text-center d-none d-md-table-cell')}
                     ${sortableHeader('Clients', 'num_clients', 'text-center d-none d-sm-table-cell')}
-                    ${sortableHeader('Switch Health', 'switch-health')}
+                    ${sortableHeader('Switch Health', 'switch-health-v2')}
                     ${sortableHeader('Successful Connect', 'switch-stc', 'd-none d-lg-table-cell')}
                     ${sortableHeader('Throughput', 'switch-throughput', 'd-none d-lg-table-cell')}
                     ${sortableHeader('Bandwidth', 'switch-bandwidth', 'd-none d-xl-table-cell')}
@@ -1472,7 +1472,7 @@
                         <td><a href="/sites/${site.site_id}" class="site-name-link">${site.site_name || 'Unknown'}</a></td>
                         <td class="text-center d-none d-md-table-cell">${site.num_switches || 0}</td>
                         <td class="text-center d-none d-sm-table-cell">${site.num_clients || 0}</td>
-                        <td>${formatSleValue(getSleValue(site, 'switch-health'))}</td>
+                        <td>${formatSleValue(getSleValue(site, 'switch-health-v2'))}</td>
                         <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'switch-stc'))}</td>
                         <td class="d-none d-lg-table-cell">${formatSleValue(getSleValue(site, 'switch-throughput'))}</td>
                         <td class="d-none d-xl-table-cell">${formatSleValue(getSleValue(site, 'switch-bandwidth'))}</td>
@@ -1927,7 +1927,7 @@
                 'time-to-connect': 'Measures the time from when a client sends an association packet to when it can successfully move data.',
                 
                 // Wired SLEs
-                'switch-health': 'Monitors the operational status and performance of network switches, including reboot incidents and connectivity issues.',
+                'switch-health-v2': 'Monitors the operational status and performance of network switches, including reboot incidents and connectivity issues.',
                 'switch-stc': 'Measures clients\' ability to connect to the wired network. Uses 802.1X events or DHCP snooping to identify connection failures.',
                 'switch-throughput': 'Represents the ability of wired users to pass traffic without impedance. Classifiers include Storm Control, Cable Issues, Negotiation Failed, and MTU Mismatch.',
                 

@@ -375,7 +375,7 @@ def get_org_sle_by_metric(sle_type, metric):
         valid_metrics = {
             "wifi": ["time-to-connect", "successful-connect", "coverage", "roaming", 
                      "throughput", "capacity", "ap-health", "ap-availability"],
-            "wired": ["switch-health", "switch-stc", "switch-throughput", "switch-bandwidth"],
+            "wired": ["switch-health-v2", "switch-stc", "switch-throughput", "switch-bandwidth"],
             "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
         }
         

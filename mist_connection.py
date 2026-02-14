@@ -574,7 +574,7 @@ class MistConnection:
             # These are the standard SLE metric names from the Mist API
             metric_categories = {
                 "wifi": ["coverage", "capacity", "time-to-connect", "roaming", "throughput", "ap-availability", "ap-health"],
-                "wired": ["switch-health", "switch-throughput", "switch-stc"],
+                "wired": ["switch-health-v2", "switch-throughput", "switch-stc"],
                 "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
             }
             
@@ -975,7 +975,7 @@ class MistConnection:
             # -----------------------------------------------------------------
             metric_categories = {
                 "wifi": ["coverage", "capacity", "time-to-connect", "roaming", "throughput", "ap-availability", "ap-health"],
-                "wired": ["switch-health", "switch-throughput", "switch-stc"],
+                "wired": ["switch-health-v2", "switch-throughput", "switch-stc"],
                 "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
             }
             
