@@ -2095,9 +2095,10 @@ class MistConnection:
             }
             start_time = end_time - duration_seconds.get(duration, 86400)
             
-            # Call the worst-sites-by-sle endpoint with all_sle=false for single metric
+            # Call the worst-sites-by-sle endpoint
             # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
-            # all_sle=false returns only the requested metric, sorted by worst
+            # The 'sle' param determines which metric to rank/sort by
+            # all_sle=true (default) returns all SLE metrics for the category, which we need for display
             # API supports limit param (undocumented, default is 10)
             uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
             # mist_get expects query as a separate dict with string values
@@ -2105,7 +2106,7 @@ class MistConnection:
                 "sle": metric,
                 "start": str(start_time),
                 "end": str(end_time),
-                "all_sle": "false",  # Only return the specified metric
+                # all_sle defaults to true - includes all metrics for display
                 "limit": str(limit)
             }
             
