@@ -779,44 +779,24 @@
         }
         
         function renderImpactDetails(data) {
-            const aps = data.aps || [];
-            const wlans = data.wlans || [];
-            const deviceTypes = data.device_types || [];
-            const deviceOs = data.device_os || [];
-            const bands = data.bands || [];
+            // For wired SLEs, use switches and chassis data
+            const switches = data.switches || [];
+            const chassis = data.chassis || [];
             
             // Build tabs based on available data
             let tabsHtml = '<ul class="nav nav-tabs" role="tablist">';
             let contentHtml = '<div class="tab-content mt-3">';
             let firstTab = true;
             
-            if (aps.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#apsTab">Switches (${aps.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">${renderImpactTable(aps, 'name', 'Switch Name')}</div>`;
+            if (switches.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#switchesTab">Switches (${switches.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="switchesTab">${renderSwitchImpactTable(switches)}</div>`;
                 firstTab = false;
             }
             
-            if (wlans.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#wlansTab">VLANs (${wlans.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">${renderImpactTable(wlans, 'name', 'VLAN Name')}</div>`;
-                firstTab = false;
-            }
-            
-            if (deviceTypes.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceTypesTab">Device Types (${deviceTypes.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">${renderImpactTable(deviceTypes, 'name', 'Device Type')}</div>`;
-                firstTab = false;
-            }
-            
-            if (deviceOs.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceOsTab">OS (${deviceOs.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">${renderImpactTable(deviceOs, 'name', 'Operating System')}</div>`;
-                firstTab = false;
-            }
-            
-            if (bands.length > 0) {
-                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#bandsTab">Ports (${bands.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">${renderImpactTable(bands, 'band', 'Port')}</div>`;
+            if (chassis.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#chassisTab">Chassis (${chassis.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="chassisTab">${renderChassisImpactTable(chassis)}</div>`;
                 firstTab = false;
             }
             
@@ -828,7 +808,7 @@
                 document.getElementById('impactModalBody').innerHTML = `
                     <div class="text-center text-secondary py-4">
                         <i class="bi bi-info-circle icon-large"></i>
-                        <p class="mt-2">No specific device impact data available for this classifier.</p>
+                        <p class="mt-2">No specific switch impact data available for this classifier.</p>
                     </div>
                 `;
             } else {
@@ -836,6 +816,88 @@
             }
         }
         
+        function renderSwitchImpactTable(items) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Switch Name</th>
+                            <th>Model</th>
+                            <th>Duration (min)</th>
+                            <th>Degraded %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            items.forEach(item => {
+                const name = item.name || 'Unknown';
+                const model = item.model || '';
+                const duration = item.duration || 0;
+                const degraded = item.degraded || 0;
+                const durationMin = (duration / 60).toFixed(1);
+                
+                let pctClass = 'low';
+                if (degraded >= 10) pctClass = 'high';
+                else if (degraded >= 5) pctClass = 'medium';
+                
+                html += `
+                    <tr>
+                        <td>${name}</td>
+                        <td>${model}</td>
+                        <td>${durationMin}</td>
+                        <td><span class="impact-pct ${pctClass}">${degraded.toFixed(2)}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        function renderChassisImpactTable(items) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Chassis ID</th>
+                            <th>Switch Name</th>
+                            <th>Role</th>
+                            <th>Duration (min)</th>
+                            <th>Degraded %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            items.forEach(item => {
+                const chassisId = item.chassis_id || item.chassis || '';
+                const switchName = item.switch_name || 'Unknown';
+                const role = item.role || '';
+                const duration = item.duration || 0;
+                const degraded = item.degraded || 0;
+                const durationMin = (duration / 60).toFixed(1);
+                
+                let pctClass = 'low';
+                if (degraded >= 10) pctClass = 'high';
+                else if (degraded >= 5) pctClass = 'medium';
+                
+                html += `
+                    <tr>
+                        <td>${chassisId}</td>
+                        <td>${switchName}</td>
+                        <td>${role}</td>
+                        <td>${durationMin}</td>
+                        <td><span class="impact-pct ${pctClass}">${degraded.toFixed(2)}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        // Keep generic renderImpactTable for fallback compatibility
         function renderImpactTable(items, nameKey, nameLabel) {
             let html = `
                 <table class="table table-dark table-sm impact-detail-table">

@@ -1179,22 +1179,43 @@ class MistConnection:
         try:
             session = self._get_session()
             
+            # For wired metrics, we need to request switch,chassis fields
+            # For WiFi metrics, we need ap,wlan,device_type,device_os,band fields
+            is_wired_metric = metric.startswith("switch-")
+            
             # Fetch impact summary from the Mist API
-            response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(
-                session,
-                site_id,
-                scope="site",
-                scope_id=site_id,
-                metric=metric,
-                classifier=classifier,
-                duration=duration
-            )
+            if is_wired_metric:
+                # Wired metrics need fields=switch,chassis
+                response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(
+                    session,
+                    site_id,
+                    scope="site",
+                    scope_id=site_id,
+                    metric=metric,
+                    classifier=classifier,
+                    duration=duration,
+                    fields="switch,chassis"
+                )
+            else:
+                # WiFi and WAN metrics
+                response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(
+                    session,
+                    site_id,
+                    scope="site",
+                    scope_id=site_id,
+                    metric=metric,
+                    classifier=classifier,
+                    duration=duration
+                )
             
             data = response.data if hasattr(response, "data") else response
             
+            # Log raw data for debugging
+            logger.debug(f"Impact summary raw data keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+            
             # Return empty structure if no valid data
             if not isinstance(data, dict):
-                return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": []}
+                return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": [], "switches": [], "chassis": []}
             
             # -----------------------------------------------------------------
             # Process APs - extract only those with actual degradation
@@ -1273,6 +1294,54 @@ class MistConnection:
                     })
             bands.sort(key=lambda x: x["degraded"], reverse=True)
             
+            # -----------------------------------------------------------------
+            # Process Switches (for wired SLEs)
+            # Response format: {"switch_mac": "...", "name": "...", "degraded": 1.95, 
+            #                   "total": 1251.53, "duration": 1251.53, "switch_model": "...", "switch_version": "..."}
+            # -----------------------------------------------------------------
+            switches = []
+            for sw in data.get("switch", []):
+                if sw.get("degraded", 0) > 0 or sw.get("duration", 0) > 0:
+                    switches.append({
+                        "mac": sw.get("switch_mac", sw.get("mac", "")),
+                        "name": sw.get("name", sw.get("switch_mac", "Unknown")),
+                        "degraded": sw.get("degraded", 0),
+                        "total": sw.get("total", 0),
+                        "duration": sw.get("duration", 0),
+                        "model": sw.get("switch_model", ""),
+                        "version": sw.get("switch_version", ""),
+                        "chassis_mac": sw.get("chassis_mac", "")
+                    })
+            switches.sort(key=lambda x: x.get("degraded", 0), reverse=True)
+            
+            # -----------------------------------------------------------------
+            # Process Chassis (for wired SLEs with virtual chassis)
+            # Response format: {"chassis": "0", "switch_mac": "...", "switch_name": "...",
+            #                   "degraded": 1.95, "total": 1.95, "role": "master"}
+            # -----------------------------------------------------------------
+            chassis = []
+            for ch in data.get("chassis", []):
+                if ch.get("degraded", 0) > 0 or ch.get("duration", 0) > 0:
+                    chassis.append({
+                        "chassis_id": ch.get("chassis", ""),
+                        "switch_mac": ch.get("switch_mac", ""),
+                        "switch_name": ch.get("switch_name", ""),
+                        "degraded": ch.get("degraded", 0),
+                        "total": ch.get("total", 0),
+                        "duration": ch.get("duration", 0),
+                        "role": ch.get("role", ""),
+                        "chassis_mac": ch.get("chassis_mac", "")
+                    })
+            chassis.sort(key=lambda x: x.get("degraded", 0), reverse=True)
+            
+            # Log raw data keys for debugging wired SLEs
+            if metric.startswith("switch-"):
+                logger.info(f"Wired impact data keys: {list(data.keys())}")
+                if "switch" in data and data["switch"]:
+                    logger.info(f"Found {len(data['switch'])} switches in impact data")
+                if "chassis" in data and data["chassis"]:
+                    logger.info(f"Found {len(data['chassis'])} chassis in impact data")
+            
             return {
                 "metric": metric,
                 "classifier": classifier,
@@ -1280,12 +1349,14 @@ class MistConnection:
                 "wlans": wlans,
                 "device_types": device_types,
                 "device_os": device_os,
-                "bands": bands
+                "bands": bands,
+                "switches": switches,
+                "chassis": chassis
             }
             
         except Exception as error:
             logger.error(f"Error fetching classifier impact details: {error}")
-            return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": []}
+            return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": [], "switches": [], "chassis": []}
     
     # =========================================================================
     # DEVICE AND CLIENT METHODS
