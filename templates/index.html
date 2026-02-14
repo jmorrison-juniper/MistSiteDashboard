@@ -855,8 +855,8 @@
                 <!-- Wired Metrics (hidden by default) -->
                 <div id="wiredMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card active" data-metric="switch-health">Switch Health</div>
-                    <div class="sle-metric-card" data-metric="switch-stc">Successful Connect</div>
+                    <div class="sle-metric-card" data-metric="switch-health">Switch Health</div>
+                    <div class="sle-metric-card active" data-metric="switch-stc">Successful Connect</div>
                     <div class="sle-metric-card" data-metric="switch-throughput">Throughput</div>
                     <div class="sle-metric-card" data-metric="switch-bandwidth">Switch Bandwidth</div>
                 </div>
@@ -1511,7 +1511,7 @@
             document.getElementById('wanMetrics').style.display = category === 'wan' ? 'flex' : 'none';
             
             // Set default metric for new category
-            const defaultMetrics = { wifi: 'time-to-connect', wired: 'switch-health', wan: 'gateway-health' };
+            const defaultMetrics = { wifi: 'time-to-connect', wired: 'switch-stc', wan: 'gateway-health' };
             activeMetric = defaultMetrics[category];
             sortColumn = defaultMetrics[category];  // Sort by default metric
             sortDirection = 'asc';  // Worst first

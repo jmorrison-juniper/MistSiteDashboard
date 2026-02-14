@@ -1939,7 +1939,7 @@ class MistConnection:
             # Using all_sle=true (default) returns all metrics in the same category
             sle_metric_map = {
                 "wifi": "ap-availability",     # Returns all WiFi metrics
-                "wired": "switch-health",      # Returns all wired metrics
+                "wired": "switch-stc",         # Returns all wired metrics (switch-health may return 0 results)
                 "wan": "gateway-health"        # Returns all WAN metrics
             }
             sle_metric = sle_metric_map.get(sle_type, "ap-availability")
@@ -2115,7 +2115,6 @@ class MistConnection:
             sites_list = []
             if response and response.status_code == 200:
                 data = response.data if hasattr(response, "data") else {}
-                logger.debug(f"Raw response type: {type(data)}, keys: {data.keys() if isinstance(data, dict) else 'N/A (list)'}")
                 
                 # API can return either {"results": [...]} or just a list
                 if isinstance(data, list):
@@ -2124,8 +2123,6 @@ class MistConnection:
                     results = data.get("results", [])
                 else:
                     results = []
-                
-                logger.debug(f"Parsed results count: {len(results)}")
                 
                 for site_data in results:
                     site_id = site_data.get("site_id", "")
