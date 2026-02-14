@@ -2115,7 +2115,17 @@ class MistConnection:
             sites_list = []
             if response and response.status_code == 200:
                 data = response.data if hasattr(response, "data") else {}
-                results = data.get("results", []) if isinstance(data, dict) else data
+                logger.debug(f"Raw response type: {type(data)}, keys: {data.keys() if isinstance(data, dict) else 'N/A (list)'}")
+                
+                # API can return either {"results": [...]} or just a list
+                if isinstance(data, list):
+                    results = data
+                elif isinstance(data, dict):
+                    results = data.get("results", [])
+                else:
+                    results = []
+                
+                logger.debug(f"Parsed results count: {len(results)}")
                 
                 for site_data in results:
                     site_id = site_data.get("site_id", "")
