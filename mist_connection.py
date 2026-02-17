@@ -2246,12 +2246,11 @@ class MistConnection:
             
             # Call the worst-sites-by-sle endpoint
             # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
-            # The 'sle' param only accepts category: wifi, wired, or wan
-            # Returns all metrics for that category, then we sort by the requested metric
+            # The 'sle' param accepts the specific metric name (e.g., time-to-connect)
             uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
             # mist_get expects query as a separate dict with string values
             query_params = {
-                "sle": sle_category,
+                "sle": metric,
                 "start": str(start_time),
                 "end": str(end_time),
                 "limit": str(limit)
