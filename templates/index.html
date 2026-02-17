@@ -630,13 +630,15 @@
         
         .sle-metric-card .metric-refresh {
             margin-left: 0.5rem;
-            opacity: 0;
+            opacity: 0.3;
             transition: opacity 0.2s;
             cursor: pointer;
+            padding: 0.25rem;
+            display: inline-block;
         }
         
         .sle-metric-card:hover .metric-refresh {
-            opacity: 0.6;
+            opacity: 0.7;
         }
         
         .sle-metric-card .metric-refresh:hover {
@@ -1635,9 +1637,12 @@
             document.querySelectorAll('.metric-refresh').forEach(icon => {
                 icon.addEventListener('click', async function(e) {
                     e.stopPropagation();
+                    e.preventDefault();
                     const card = this.closest('.sle-metric-card');
                     const metric = card.dataset.metric;
                     const category = card.dataset.category;
+                    
+                    console.log(`Refresh clicked: metric=${metric}, category=${category}`);
                     
                     // Add spinning animation
                     this.classList.add('spinning');
@@ -1647,11 +1652,13 @@
                     
                     this.classList.remove('spinning');
                     if (success) {
+                        console.log(`Refresh successful for ${metric}`);
                         // If this is the active metric, re-render the table
                         if (metric === activeMetric && category === activeCategory) {
                             renderOrgSleTable();
                         }
                     } else {
+                        console.log(`Refresh failed for ${metric}`);
                         card.classList.add('error');
                     }
                 });
