@@ -2062,7 +2062,20 @@ class MistConnection:
                 "limit": str(limit)
             }
             
-            response = session.mist_get(uri, query=query_params)
+            # Retry logic for intermittent 400 errors from Mist API
+            max_retries = 3
+            response = None
+            for attempt in range(max_retries):
+                response = session.mist_get(uri, query=query_params)
+                if response and response.status_code == 200:
+                    break
+                if response and response.status_code == 400 and attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(f"API returned 400, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    break
             
             sites_list = []
             if response and response.status_code == 200:
@@ -2166,6 +2179,34 @@ class MistConnection:
             
             logger.info(f"Fetching worst sites by metric '{metric}' (duration: {duration})")
             
+            # Map metric to SLE category - API only accepts wifi/wired/wan for 'sle' parameter
+            metric_to_category = {
+                # WiFi metrics
+                "time-to-connect": "wifi",
+                "successful-connect": "wifi",
+                "coverage": "wifi",
+                "roaming": "wifi",
+                "throughput": "wifi",
+                "capacity": "wifi",
+                "ap-health": "wifi",
+                "ap-availability": "wifi",
+                # Wired metrics
+                "switch-health-v2": "wired",
+                "switch-stc": "wired",
+                "switch-throughput": "wired",
+                "switch-bandwidth": "wired",
+                # WAN metrics
+                "gateway-health": "wan",
+                "wan-link-health": "wan",
+                "application-health": "wan",
+                "gateway-bandwidth": "wan"
+            }
+            
+            sle_category = metric_to_category.get(metric)
+            if not sle_category:
+                logger.warning(f"Unknown metric '{metric}', defaulting to wifi category")
+                sle_category = "wifi"
+            
             # Fetch all sites for name resolution (paginate to get all sites)
             site_name_map = {}
             page = 1
@@ -2205,20 +2246,31 @@ class MistConnection:
             
             # Call the worst-sites-by-sle endpoint
             # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
-            # The 'sle' param determines which metric to rank/sort by
-            # all_sle=true (default) returns all SLE metrics for the category, which we need for display
-            # API supports limit param (undocumented, default is 10)
+            # The 'sle' param only accepts category: wifi, wired, or wan
+            # Returns all metrics for that category, then we sort by the requested metric
             uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
             # mist_get expects query as a separate dict with string values
             query_params = {
-                "sle": metric,
+                "sle": sle_category,
                 "start": str(start_time),
                 "end": str(end_time),
-                # all_sle defaults to true - includes all metrics for display
                 "limit": str(limit)
             }
             
-            response = session.mist_get(uri, query=query_params)
+            # Retry logic for intermittent 400 errors from Mist API
+            max_retries = 3
+            response = None
+            for attempt in range(max_retries):
+                response = session.mist_get(uri, query=query_params)
+                if response and response.status_code == 200:
+                    break
+                if response and response.status_code == 400 and attempt < max_retries - 1:
+                    import time
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(f"API returned 400, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    break
             
             sites_list = []
             if response and response.status_code == 200:
