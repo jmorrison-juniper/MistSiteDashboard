@@ -94,6 +94,7 @@
             padding: 1.5rem;
             cursor: pointer;
             transition: all 0.2s ease;
+            position: relative;
         }
         
         .sle-card:hover {
@@ -172,6 +173,13 @@
             background: rgba(226, 0, 116, 0.2);
             border-color: var(--tm-magenta);
             color: var(--text-primary);
+        }
+        
+        .sle-csv-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            z-index: 10;
         }
         
         .loading-spinner {
@@ -294,6 +302,9 @@
             <div class="col-md-4 mb-3">
                 <a href="/sle/wifi/{{ site_id }}" class="text-decoration-none">
                     <div class="card sle-card">
+                        <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wifi')" title="Download CSV">
+                            <i class="bi bi-download"></i>
+                        </button>
                         <div class="sle-icon"><i class="bi bi-wifi" style="color: var(--tm-magenta);"></i></div>
                         <div class="sle-value" id="wifiSle">-</div>
                         <div class="sle-label">WiFi SLE</div>
@@ -304,6 +315,9 @@
             <div class="col-md-4 mb-3">
                 <a href="/sle/wired/{{ site_id }}" class="text-decoration-none">
                     <div class="card sle-card">
+                        <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wired')" title="Download CSV">
+                            <i class="bi bi-download"></i>
+                        </button>
                         <div class="sle-icon"><i class="bi bi-ethernet" style="color: var(--tm-magenta-light);"></i></div>
                         <div class="sle-value" id="wiredSle">-</div>
                         <div class="sle-label">Wired SLE</div>
@@ -314,6 +328,9 @@
             <div class="col-md-4 mb-3">
                 <a href="/sle/wan/{{ site_id }}" class="text-decoration-none">
                     <div class="card sle-card">
+                        <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wan')" title="Download CSV">
+                            <i class="bi bi-download"></i>
+                        </button>
                         <div class="sle-icon"><i class="bi bi-globe" style="color: var(--tm-magenta);"></i></div>
                         <div class="sle-value" id="wanSle">-</div>
                         <div class="sle-label">WAN SLE</div>
@@ -630,6 +647,24 @@
             link.href = URL.createObjectURL(blob);
             link.download = filename;
             link.click();
+        }
+        
+        // SLE CSV download helper - fetches from backend API
+        function downloadSleCsv(event, category) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const siteId = '{{ site_id }}';
+            const duration = document.getElementById('durationSelector').value;
+            const url = `/api/sites/${siteId}/sle/${category}/csv?duration=${duration}`;
+            
+            // Trigger download via hidden link
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `sle_${category}_${siteId}_${duration}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
         
         // Initialize on page load

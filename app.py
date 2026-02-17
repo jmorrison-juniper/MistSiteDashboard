@@ -51,6 +51,8 @@ Example:
 # =============================================================================
 
 # Standard library imports
+import csv
+import io
 import os
 import sys
 import logging
@@ -58,7 +60,7 @@ from datetime import datetime
 from functools import wraps
 
 # Third-party imports
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, Response, render_template, jsonify, request
 from dotenv import load_dotenv  # Loads environment variables from .env file
 
 # =============================================================================
@@ -925,6 +927,98 @@ def get_sle_impacted_items(site_id, metric, item_type):
         return jsonify(data)
     except Exception as error:
         logger.error(f"Error fetching impacted {item_type}: {error}")
+        return jsonify({"error": str(error)}), 500
+
+
+# =============================================================================
+# SLE CSV EXPORT ENDPOINT
+# =============================================================================
+
+@app.route("/api/sites/<site_id>/sle/<category>/csv", methods=["GET"])
+def export_sle_csv(site_id, category):
+    """
+    Export SLE data for a category as CSV.
+    
+    Generates a CSV file containing all metrics and their classifiers
+    for the specified SLE category (wifi, wired, or wan).
+    
+    Args:
+        site_id: UUID of the site to query
+        category: SLE category ("wifi", "wired", or "wan")
+        
+    Query Parameters:
+        duration: Time range for analysis (default: "1d")
+        
+    Returns:
+        CSV file download with columns:
+        - Metric, SLE Value (%), Classifier, Contribution (%), Impact Count
+        
+    Status Codes:
+        200: CSV generated successfully
+        400: Invalid category
+        500: Server error during generation
+    """
+    valid_categories = ["wifi", "wired", "wan"]
+    if category not in valid_categories:
+        return jsonify({
+            "error": f"Invalid category: {category}. Must be one of: {valid_categories}"
+        }), 400
+    
+    try:
+        mist = get_mist_connection()
+        duration = request.args.get("duration", "1d")
+        data = mist.get_sle_details(site_id, category, duration)
+        
+        # Build CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            "Metric",
+            "SLE Value (%)",
+            "Classifier",
+            "Contribution (%)",
+            "Impact Count"
+        ])
+        
+        # Flatten metrics and classifiers into rows
+        metrics = data.get("metrics", {})
+        for metric_name, metric_data in metrics.items():
+            sle_value = metric_data.get("sle_value")
+            sle_display = f"{sle_value:.1f}" if sle_value is not None else "N/A"
+            
+            classifiers = metric_data.get("classifiers", [])
+            if classifiers:
+                for classifier in classifiers:
+                    classifier_name = classifier.get("name", "Unknown")
+                    contribution = classifier.get("contribution", 0)
+                    impact_count = classifier.get("impact_count", classifier.get("degraded", 0))
+                    writer.writerow([
+                        metric_name,
+                        sle_display,
+                        classifier_name,
+                        f"{contribution:.1f}" if contribution else "0.0",
+                        impact_count
+                    ])
+            else:
+                # Metric with no classifiers - write single row
+                writer.writerow([metric_name, sle_display, "", "", ""])
+        
+        # Generate response with CSV content
+        csv_content = output.getvalue()
+        output.close()
+        
+        filename = f"sle_{category}_{site_id}_{duration}.csv"
+        
+        return Response(
+            csv_content,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as error:
+        logger.error(f"Error exporting SLE CSV: {error}")
         return jsonify({"error": str(error)}), 500
 
 
