@@ -623,6 +623,39 @@
             color: white;
         }
         
+        .sle-metric-card.error {
+            border-color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.2);
+        }
+        
+        .sle-metric-card .metric-refresh {
+            margin-left: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+        }
+        
+        .sle-metric-card:hover .metric-refresh {
+            opacity: 0.6;
+        }
+        
+        .sle-metric-card .metric-refresh:hover {
+            opacity: 1;
+        }
+        
+        .sle-metric-card.error .metric-refresh {
+            opacity: 1;
+            color: #ffc107;
+        }
+        
+        .sle-metric-card .metric-refresh.spinning {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        
         /* Org SLE table styling */
         .org-sle-table .sle-cell {
             min-width: 80px;
@@ -838,13 +871,13 @@
                 <!-- WiFi Metrics (shown by default) -->
                 <div id="wifiMetrics" class="sle-metrics-row">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card active" data-metric="time-to-connect">Time to Connect</div>
-                    <div class="sle-metric-card" data-metric="successful-connect">Successful Connect</div>
-                    <div class="sle-metric-card" data-metric="coverage">Coverage</div>
-                    <div class="sle-metric-card" data-metric="roaming">Roaming</div>
-                    <div class="sle-metric-card" data-metric="throughput">Throughput</div>
-                    <div class="sle-metric-card" data-metric="capacity">Capacity</div>
-                    <div class="sle-metric-card" data-metric="ap-health">AP Health</div>
+                    <div class="sle-metric-card active" data-metric="time-to-connect" data-category="wifi">Time to Connect <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="successful-connect" data-category="wifi">Successful Connect <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="coverage" data-category="wifi">Coverage <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="roaming" data-category="wifi">Roaming <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="throughput" data-category="wifi">Throughput <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="capacity" data-category="wifi">Capacity <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="ap-health" data-category="wifi">AP Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                     <div class="ms-auto d-flex align-items-center">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="hideExcludedWlans" checked>
@@ -855,18 +888,18 @@
                 <!-- Wired Metrics (hidden by default) -->
                 <div id="wiredMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card" data-metric="switch-health-v2">Switch Health</div>
-                    <div class="sle-metric-card active" data-metric="switch-stc">Successful Connect</div>
-                    <div class="sle-metric-card" data-metric="switch-throughput">Throughput</div>
-                    <div class="sle-metric-card" data-metric="switch-bandwidth">Switch Bandwidth</div>
+                    <div class="sle-metric-card" data-metric="switch-health-v2" data-category="wired">Switch Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card active" data-metric="switch-stc" data-category="wired">Successful Connect <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="switch-throughput" data-category="wired">Throughput <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="switch-bandwidth" data-category="wired">Switch Bandwidth <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                 </div>
                 <!-- WAN Metrics (hidden by default) -->
                 <div id="wanMetrics" class="sle-metrics-row" style="display: none;">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
-                    <div class="sle-metric-card active" data-metric="gateway-health">WAN Edge Health</div>
-                    <div class="sle-metric-card" data-metric="wan-link-health">WAN Link Health</div>
-                    <div class="sle-metric-card" data-metric="application-health">Application Health</div>
-                    <div class="sle-metric-card" data-metric="gateway-bandwidth">Gateway Bandwidth</div>
+                    <div class="sle-metric-card active" data-metric="gateway-health" data-category="wan">WAN Edge Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="wan-link-health" data-category="wan">WAN Link Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="application-health" data-category="wan">Application Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
+                    <div class="sle-metric-card" data-metric="gateway-bandwidth" data-category="wan">Gateway Bandwidth <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                 </div>
             </div>
             
@@ -1303,19 +1336,23 @@
         // Fetch org-wide SLE data for a specific category and metric
         async function fetchOrgSleByMetric(category, metric) {
             const duration = document.getElementById('orgSleDuration').value;
+            const card = document.querySelector(`.sle-metric-card[data-metric="${metric}"][data-category="${category}"]`);
             try {
                 const response = await fetch(`/api/org/sle/${category}/metric/${metric}?duration=${duration}`);
                 const data = await response.json();
                 if (data.success) {
                     if (!orgSleData[category]) orgSleData[category] = {};
                     orgSleData[category][metric] = data.sites || [];
+                    if (card) card.classList.remove('error');
                     return true;
                 } else {
                     console.error(`Failed to fetch org ${category} SLE for ${metric}:`, data.error);
+                    if (card) card.classList.add('error');
                     return false;
                 }
             } catch (error) {
                 console.error(`Error fetching org ${category} SLE for ${metric}:`, error);
+                if (card) card.classList.add('error');
                 return false;
             }
         }
@@ -1585,10 +1622,38 @@
             
             // Metric card click listeners
             document.querySelectorAll('.sle-metric-card').forEach(card => {
-                card.addEventListener('click', function() {
+                card.addEventListener('click', function(e) {
+                    // Ignore clicks on the refresh icon
+                    if (e.target.classList.contains('metric-refresh')) return;
                     const metricsRow = this.closest('.sle-metrics-row');
                     const category = metricsRow.id.replace('Metrics', '');
                     switchMetric(this.dataset.metric, category);
+                });
+            });
+            
+            // Metric refresh icon click listeners
+            document.querySelectorAll('.metric-refresh').forEach(icon => {
+                icon.addEventListener('click', async function(e) {
+                    e.stopPropagation();
+                    const card = this.closest('.sle-metric-card');
+                    const metric = card.dataset.metric;
+                    const category = card.dataset.category;
+                    
+                    // Add spinning animation
+                    this.classList.add('spinning');
+                    card.classList.remove('error');
+                    
+                    const success = await fetchOrgSleByMetric(category, metric);
+                    
+                    this.classList.remove('spinning');
+                    if (success) {
+                        // If this is the active metric, re-render the table
+                        if (metric === activeMetric && category === activeCategory) {
+                            renderOrgSleTable();
+                        }
+                    } else {
+                        card.classList.add('error');
+                    }
                 });
             });
             
