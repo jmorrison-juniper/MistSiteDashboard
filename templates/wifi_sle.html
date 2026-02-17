@@ -318,6 +318,60 @@
         .impact-pct.low {
             color: var(--accent-green);
         }
+        
+        /* Skeleton loading styles */
+        .skeleton-card {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .skeleton-card .card-body {
+            min-height: 150px;
+        }
+        
+        .skeleton-pulse {
+            animation: skeleton-pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes skeleton-pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 0.7; }
+            100% { opacity: 0.4; }
+        }
+        
+        .skeleton-text {
+            background: linear-gradient(90deg, var(--bg-card-header) 25%, var(--bg-secondary) 50%, var(--bg-card-header) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shine 1.5s ease-in-out infinite;
+            border-radius: 4px;
+            height: 1em;
+            display: inline-block;
+        }
+        
+        @keyframes skeleton-shine {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .metric-card.loaded {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .metric-card.loading {
+            border-color: var(--accent-yellow);
+            opacity: 0.7;
+        }
+        
+        .site-name-badge {
+            background-color: rgba(226, 0, 116, 0.2);
+            border: 1px solid var(--tm-magenta);
+            color: var(--text-primary);
+            font-weight: 500;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -355,11 +409,13 @@
     </nav>
 
     <div class="container-fluid px-4 py-4">
-        <!-- Breadcrumb -->
+        <!-- Breadcrumb with Site Name -->
         <nav aria-label="breadcrumb" class="mb-4">
-            <ol class="breadcrumb">
+            <ol class="breadcrumb d-flex align-items-center">
                 <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="#" id="siteLink">Site</a></li>
                 <li class="breadcrumb-item active" aria-current="page">WiFi SLE Details</li>
+                <li class="ms-auto"><span class="site-name-badge" id="siteNameBadge"><i class="bi bi-geo-alt me-1"></i><span id="siteNameText">Loading...</span></span></li>
             </ol>
         </nav>
 
@@ -394,6 +450,12 @@
         const siteId = "{{ site_id }}";
         let sleData = null;
         let siteName = 'unknown';
+
+        // Impact field configuration - single source of truth for table headers and CSV export
+        const impactFieldConfig = {
+            primary: { field: 'num_aps', totalField: 'total_aps', label: 'APs' },
+            secondary: { field: 'num_users', totalField: 'total_users', label: 'Users' }
+        };
 
         // Metric display names
         const metricDisplayNames = {
@@ -591,7 +653,7 @@
                             ${sortableHeader('Classifier', 'name')}
                             ${sortableHeader('Contribution', 'percentage')}
                             <th>Impact Bar</th>
-                            ${sortableHeader('Affected APs/Users', 'affected')}
+                            ${sortableHeader(`Affected ${impactFieldConfig.primary.label}/${impactFieldConfig.secondary.label}`, 'affected')}
                         </tr>
                     </thead>
                     <tbody>
@@ -602,19 +664,19 @@
                 const displayName = formatClassifierName(clfName);
                 const percentage = clf.percentage || 0;
                 const impact = clf.impact || {};
-                const affectedAps = impact.num_aps || 0;
-                const totalAps = impact.total_aps || 0;
-                const affectedUsers = impact.num_users || 0;
-                const totalUsers = impact.total_users || 0;
+                const affectedPrimary = impact[impactFieldConfig.primary.field] || 0;
+                const totalPrimary = impact[impactFieldConfig.primary.totalField] || 0;
+                const affectedSecondary = impact[impactFieldConfig.secondary.field] || 0;
+                const totalSecondary = impact[impactFieldConfig.secondary.totalField] || 0;
                 
-                // Build impact string
+                // Build impact string using config labels
                 let impactStr = '';
-                if (totalAps > 0) {
-                    impactStr += `${affectedAps}/${totalAps} APs`;
+                if (totalPrimary > 0) {
+                    impactStr += `${affectedPrimary}/${totalPrimary} ${impactFieldConfig.primary.label}`;
                 }
-                if (totalUsers > 0) {
+                if (totalSecondary > 0) {
                     if (impactStr) impactStr += ', ';
-                    impactStr += `${affectedUsers}/${totalUsers} Users`;
+                    impactStr += `${affectedSecondary}/${totalSecondary} ${impactFieldConfig.secondary.label}`;
                 }
                 if (!impactStr) impactStr = '-';
 
@@ -659,22 +721,6 @@
             const duration = document.getElementById('durationSelect').value;
             
             try {
-                // Fetch site name if not already loaded
-                if (siteName === 'unknown') {
-                    try {
-                        const sitesResponse = await fetch('/api/sites');
-                        if (sitesResponse.ok) {
-                            const sitesData = await sitesResponse.json();
-                            const site = sitesData.sites.find(s => s.id === siteId);
-                            if (site) {
-                                siteName = site.name.replace(/[^a-zA-Z0-9]/g, '_');
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Could not fetch site name:', e);
-                    }
-                }
-                
                 const response = await fetch(`/api/sites/${siteId}/sle/wifi?duration=${duration}`);
                 if (!response.ok) throw new Error('Failed to fetch SLE data');
                 
@@ -707,13 +753,20 @@
             const classifiers = metricData.classifiers || [];
             const displayName = metricDisplayNames[metric] || formatClassifierName(metric);
             
-            let csv = 'Classifier,Impact Events,Duration (seconds)\n';
+            // Build CSV header dynamically from config
+            const primaryLabel = impactFieldConfig.primary.label;
+            const secondaryLabel = impactFieldConfig.secondary.label;
+            let csv = `Classifier,Contribution (%),Affected ${primaryLabel},Total ${primaryLabel},Affected ${secondaryLabel},Total ${secondaryLabel}\n`;
             
             classifiers.forEach(clf => {
                 const name = clf.name || 'Unknown';
-                const events = clf.impact?.num_events || clf.impact?.count || 0;
-                const duration = clf.impact?.duration || 0;
-                csv += `"${name}",${events},${duration}\n`;
+                const percentage = clf.percentage || 0;
+                const impact = clf.impact || {};
+                const affectedPrimary = impact[impactFieldConfig.primary.field] || 0;
+                const totalPrimary = impact[impactFieldConfig.primary.totalField] || 0;
+                const affectedSecondary = impact[impactFieldConfig.secondary.field] || 0;
+                const totalSecondary = impact[impactFieldConfig.secondary.totalField] || 0;
+                csv += `"${name}",${percentage},${affectedPrimary},${totalPrimary},${affectedSecondary},${totalSecondary}\n`;
             });
             
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -728,7 +781,10 @@
         function downloadAllAsCSV() {
             if (!sleData || !sleData.metrics) return;
             
-            let csv = 'Metric,Classifier,SLE Value (%),Impact Events,Duration (seconds)\n';
+            // Build CSV header dynamically from config
+            const primaryLabel = impactFieldConfig.primary.label;
+            const secondaryLabel = impactFieldConfig.secondary.label;
+            let csv = `Metric,Classifier,SLE Value (%),Contribution (%),Affected ${primaryLabel},Total ${primaryLabel},Affected ${secondaryLabel},Total ${secondaryLabel}\n`;
             
             Object.keys(sleData.metrics).forEach(metric => {
                 const metricData = sleData.metrics[metric];
@@ -737,13 +793,17 @@
                 const classifiers = metricData.classifiers || [];
                 
                 if (classifiers.length === 0) {
-                    csv += `"${displayName}","",${sleValue !== null ? sleValue : ''},0,0\n`;
+                    csv += `"${displayName}","",${sleValue !== null ? sleValue : ''},0,0,0,0,0\n`;
                 } else {
                     classifiers.forEach(clf => {
                         const clfName = clf.name || 'Unknown';
-                        const events = clf.impact?.num_events || clf.impact?.count || 0;
-                        const duration = clf.impact?.duration || 0;
-                        csv += `"${displayName}","${clfName}",${sleValue !== null ? sleValue : ''},${events},${duration}\n`;
+                        const percentage = clf.percentage || 0;
+                        const impact = clf.impact || {};
+                        const affectedPrimary = impact[impactFieldConfig.primary.field] || 0;
+                        const totalPrimary = impact[impactFieldConfig.primary.totalField] || 0;
+                        const affectedSecondary = impact[impactFieldConfig.secondary.field] || 0;
+                        const totalSecondary = impact[impactFieldConfig.secondary.totalField] || 0;
+                        csv += `"${displayName}","${clfName}",${sleValue !== null ? sleValue : ''},${percentage},${affectedPrimary},${totalPrimary},${affectedSecondary},${totalSecondary}\n`;
                     });
                 }
             });
@@ -881,8 +941,69 @@
             return html;
         }
 
+        // Render skeleton cards for all known metrics immediately
+        function renderSkeletonCards() {
+            const metrics = Object.keys(metricDisplayNames);
+            let html = '';
+            
+            metrics.forEach(metric => {
+                const displayName = metricDisplayNames[metric];
+                html += `
+                <div class="card metric-card skeleton-card loading mb-4" id="metric-card-${metric}">
+                    <div class="card-header metric-header">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-chevron-down metric-collapse-icon me-2"></i>
+                            <span class="fw-bold">${displayName}</span>
+                            <span class="badge bg-secondary ms-2 skeleton-pulse">Loading...</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="metric-value text-secondary skeleton-pulse">--%</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center py-4 skeleton-pulse">
+                            <div class="spinner-border spinner-border-sm text-secondary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-secondary small">Loading classifier data...</p>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            document.getElementById('metricsContainer').innerHTML = html;
+        }
+
+        // Fetch site name and update the badge
+        async function fetchSiteName() {
+            try {
+                const response = await fetch('/api/sites');
+                if (response.ok) {
+                    const data = await response.json();
+                    const site = data.sites.find(s => s.id === siteId);
+                    if (site) {
+                        siteName = site.name;
+                        document.getElementById('siteNameText').textContent = site.name;
+                        document.getElementById('siteLink').href = `/sites/${siteId}`;
+                        document.getElementById('siteLink').textContent = site.name;
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not fetch site name:', e);
+                document.getElementById('siteNameText').textContent = 'Unknown Site';
+            }
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
+            // Render skeleton cards immediately
+            renderSkeletonCards();
+            
+            // Fetch site name in parallel
+            fetchSiteName();
+            
+            // Fetch data
             fetchData();
             
             // Re-fetch when duration changes
