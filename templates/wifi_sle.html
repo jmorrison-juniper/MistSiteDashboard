@@ -450,6 +450,8 @@
         const siteId = "{{ site_id }}";
         let sleData = null;
         let siteName = 'unknown';
+        let currentImpactData = null;  // Store impact data for CSV export
+        let currentClassifierName = '';  // Store classifier name for CSV filename
 
         // Impact field configuration - single source of truth for table headers and CSV export
         const impactFieldConfig = {
@@ -817,6 +819,39 @@
             URL.revokeObjectURL(url);
         }
 
+        // Download impact data for a specific tab as CSV
+        function downloadImpactCsv(dataKey, nameKey, nameLabel) {
+            if (!currentImpactData || !currentImpactData[dataKey]) {
+                alert('No data available to export');
+                return;
+            }
+            
+            const items = currentImpactData[dataKey];
+            if (items.length === 0) {
+                alert('No data available to export');
+                return;
+            }
+            
+            const safeClassifier = currentClassifierName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            let csv = `${nameLabel},Degraded,Total,Impact %\n`;
+            
+            items.forEach(item => {
+                const name = item[nameKey] || 'Unknown';
+                const degraded = item.degraded || 0;
+                const total = item.total || 0;
+                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
+                csv += `"${name}",${degraded},${total},${pct}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wifi_${dataKey}_${safeClassifier}_${siteName}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
         // Show impact details modal for a classifier
         async function showImpactDetails(metric, classifier, classifierDisplayName) {
             const modal = new bootstrap.Modal(document.getElementById('impactModal'));
@@ -835,6 +870,10 @@
                 const duration = document.getElementById('durationSelect').value;
                 const response = await fetch(`/api/sites/${siteId}/sle/impact/${metric}/${classifier}?duration=${duration}`);
                 const data = await response.json();
+                
+                // Store for CSV export
+                currentClassifierName = classifierDisplayName;
+                currentImpactData = data;
                 
                 renderImpactDetails(data);
             } catch (error) {
@@ -859,31 +898,51 @@
             
             if (aps.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#apsTab">APs (${aps.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">${renderImpactTable(aps, 'name', 'AP Name')}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('aps', 'name', 'AP Name')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderImpactTable(aps, 'name', 'AP Name')}</div>`;
                 firstTab = false;
             }
             
             if (wlans.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#wlansTab">WLANs (${wlans.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">${renderImpactTable(wlans, 'name', 'WLAN Name')}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('wlans', 'name', 'WLAN Name')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderImpactTable(wlans, 'name', 'WLAN Name')}</div>`;
                 firstTab = false;
             }
             
             if (deviceTypes.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceTypesTab">Device Types (${deviceTypes.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">${renderImpactTable(deviceTypes, 'name', 'Device Type')}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('device_types', 'name', 'Device Type')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderImpactTable(deviceTypes, 'name', 'Device Type')}</div>`;
                 firstTab = false;
             }
             
             if (deviceOs.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceOsTab">OS (${deviceOs.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">${renderImpactTable(deviceOs, 'name', 'Operating System')}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('device_os', 'name', 'Operating System')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderImpactTable(deviceOs, 'name', 'Operating System')}</div>`;
                 firstTab = false;
             }
             
             if (bands.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#bandsTab">Bands (${bands.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">${renderImpactTable(bands, 'band', 'Band')}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('bands', 'band', 'Band')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderImpactTable(bands, 'band', 'Band')}</div>`;
                 firstTab = false;
             }
             

@@ -446,6 +446,8 @@
         const siteId = "{{ site_id }}";
         let sleData = null;
         let siteName = 'unknown';
+        let currentImpactData = null;  // Store impact data for CSV export
+        let currentClassifierName = '';  // Store classifier name for CSV filename
 
         // Impact field configuration - single source of truth for table headers and CSV export
         const impactFieldConfig = {
@@ -827,6 +829,57 @@
             URL.revokeObjectURL(url);
         }
 
+        // Download impact data for a specific tab as CSV
+        function downloadImpactCsv(type) {
+            if (!currentImpactData || !currentImpactData[type]) {
+                alert('No data available to export');
+                return;
+            }
+            
+            const items = currentImpactData[type];
+            if (items.length === 0) {
+                alert('No data available to export');
+                return;
+            }
+            
+            let csv = '';
+            const safeClassifier = currentClassifierName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            
+            // Define headers and field mappings for each type
+            if (type === 'gateways') {
+                csv = 'WAN Edge Name,MAC,Model,Version,Overall Impact (%),Failure Rate (%)\n';
+                items.forEach(item => {
+                    csv += `"${item.name || 'Unknown'}","${item.gateway_mac || ''}","${item.gateway_model || ''}","${item.gateway_version || ''}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
+                });
+            } else if (type === 'interfaces') {
+                csv = 'Interface Name,Gateway,Gateway MAC,Overall Impact (%),Failure Rate (%)\n';
+                items.forEach(item => {
+                    csv += `"${item.interface_name || 'Unknown'}","${item.gateway_name || ''}","${item.gateway_mac || ''}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
+                });
+            } else if (type === 'applications') {
+                csv = 'Application,Degraded,Total,Overall Impact (%),Failure Rate (%)\n';
+                items.forEach(item => {
+                    csv += `"${item.name || item.app || 'Unknown'}",${item.degraded || 0},${item.total || 0},${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
+                });
+            } else if (type === 'clients') {
+                csv = 'Name/IP,MAC,Gateway,Interfaces,Overall Impact (%),Failure Rate (%)\n';
+                items.forEach(item => {
+                    const name = item.name || item.src_ip || 'Unknown';
+                    const gwList = (item.gateways || []).map(g => g.gateway_name).join('; ') || '';
+                    const ifList = (item.gateways || []).flatMap(g => g.interfaces || []).join('; ') || '';
+                    csv += `"${name}","${item.mac || ''}","${gwList}","${ifList}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
+                });
+            }
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `wan_${type}_${safeClassifier}_${siteName}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
         // Show impact details modal for a classifier - use new impacted items API
         async function showImpactDetails(metric, classifier, classifierDisplayName) {
             const modal = new bootstrap.Modal(document.getElementById('impactModal'));
@@ -859,12 +912,16 @@
                     clientsRes.json()
                 ]);
                 
-                renderImpactDetailsTabs({
+                // Store for CSV export
+                currentClassifierName = classifierDisplayName;
+                currentImpactData = {
                     gateways: gateways.items || [],
                     interfaces: interfaces.items || [],
                     applications: applications.items || [],
                     clients: clients.items || []
-                });
+                };
+                
+                renderImpactDetailsTabs(currentImpactData);
             } catch (error) {
                 console.error('Error fetching impact details:', error);
                 document.getElementById('impactModalBody').innerHTML = `
@@ -883,25 +940,41 @@
             
             if (gateways.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#gatewaysTab">WAN Edges (${gateways.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="gatewaysTab">${renderGatewaysTable(gateways)}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="gatewaysTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('gateways')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderGatewaysTable(gateways)}</div>`;
                 firstTab = false;
             }
             
             if (interfaces.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#interfacesTab">Interfaces (${interfaces.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="interfacesTab">${renderInterfacesTable(interfaces)}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="interfacesTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('interfaces')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderInterfacesTable(interfaces)}</div>`;
                 firstTab = false;
             }
             
             if (applications.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#applicationsTab">Applications (${applications.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="applicationsTab">${renderApplicationsTable(applications)}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="applicationsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('applications')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderApplicationsTable(applications)}</div>`;
                 firstTab = false;
             }
             
             if (clients.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#clientsTab">Clients (${clients.length})</a></li>`;
-                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">${renderClientsTable(clients)}</div>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('clients')"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderClientsTable(clients)}</div>`;
                 firstTab = false;
             }
             
