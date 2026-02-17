@@ -549,19 +549,21 @@
         }
         
         .sle-category-card {
-            background: linear-gradient(135deg, var(--tm-dark) 0%, var(--card-bg) 100%);
-            border: 2px solid var(--border-color);
+            background: linear-gradient(135deg, #3D3D3D 0%, #4A4A4A 100%);
+            border: 2px solid #666666;
             border-radius: 12px;
             padding: 1.25rem;
             cursor: pointer;
             transition: all 0.3s ease;
             text-align: center;
+            color: #FFFFFF;
         }
         
         .sle-category-card:hover {
             border-color: var(--tm-magenta);
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(226, 0, 116, 0.2);
+            box-shadow: 0 4px 15px rgba(226, 0, 116, 0.3);
+            background: linear-gradient(135deg, #4A4A4A 0%, #5A5A5A 100%);
         }
         
         .sle-category-card.active {
@@ -582,7 +584,7 @@
         
         .sle-category-card .category-subtitle {
             font-size: 0.8rem;
-            color: var(--text-secondary);
+            color: #B3B3B3;
             margin-top: 0.25rem;
         }
         
