@@ -868,8 +868,18 @@
             
             try {
                 const duration = document.getElementById('durationSelect').value;
-                const response = await fetch(`/api/sites/${siteId}/sle/impact/${metric}/${classifier}?duration=${duration}`);
-                const data = await response.json();
+                
+                // Fetch both summary data and individual wireless clients in parallel
+                const [summaryResponse, clientsResponse] = await Promise.all([
+                    fetch(`/api/sites/${siteId}/sle/impact/${metric}/${classifier}?duration=${duration}`),
+                    fetch(`/api/sites/${siteId}/sle/${metric}/impacted/wireless_clients?duration=${duration}&classifier=${classifier}`)
+                ]);
+                
+                const data = await summaryResponse.json();
+                const clientsData = await clientsResponse.json();
+                
+                // Merge wireless clients into the data object
+                data.wireless_clients = clientsData.items || [];
                 
                 // Store for CSV export
                 currentClassifierName = classifierDisplayName;
@@ -890,6 +900,7 @@
             const deviceTypes = data.device_types || [];
             const deviceOs = data.device_os || [];
             const bands = data.bands || [];
+            const wirelessClients = data.wireless_clients || [];
             
             // Build tabs based on available data
             let tabsHtml = '<ul class="nav nav-tabs" role="tablist">';
@@ -946,6 +957,17 @@
                 firstTab = false;
             }
             
+            // Wireless Clients tab - individual affected clients with MAC addresses
+            if (wirelessClients.length > 0) {
+                tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#clientsTab">Clients (${wirelessClients.length})</a></li>`;
+                contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadClientsCsv()"><i class="bi bi-download me-1"></i>CSV</button>
+                    </div>
+                    ${renderClientsTable(wirelessClients)}</div>`;
+                firstTab = false;
+            }
+            
             tabsHtml += '</ul>';
             contentHtml += '</div>';
             
@@ -998,6 +1020,93 @@
             
             html += '</tbody></table>';
             return html;
+        }
+        
+        // Render wireless clients table with MAC, name, AP, SSID, device info
+        function renderClientsTable(clients) {
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead>
+                        <tr>
+                            <th>Client MAC</th>
+                            <th>Name</th>
+                            <th>AP Name</th>
+                            <th>SSID</th>
+                            <th>Device Type</th>
+                            <th>OS</th>
+                            <th>Degraded</th>
+                            <th>Total</th>
+                            <th>Impact %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            clients.forEach(client => {
+                const mac = client.mac || 'Unknown';
+                const name = client.name || '-';
+                const apName = client.ap_name || client.ap_mac || '-';
+                const ssid = client.ssid || '-';
+                const deviceType = client.device_type || '-';
+                const deviceOs = client.device_os || '-';
+                const degraded = client.degraded || 0;
+                const total = client.total || 0;
+                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
+                
+                let pctClass = 'low';
+                if (pct >= 10) pctClass = 'high';
+                else if (pct >= 5) pctClass = 'medium';
+                
+                html += `
+                    <tr>
+                        <td><code>${mac}</code></td>
+                        <td>${name}</td>
+                        <td>${apName}</td>
+                        <td>${ssid}</td>
+                        <td>${deviceType}</td>
+                        <td>${deviceOs}</td>
+                        <td>${degraded.toLocaleString()}</td>
+                        <td>${total.toLocaleString()}</td>
+                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        // Download wireless clients as CSV
+        function downloadClientsCsv() {
+            const clients = currentImpactData.wireless_clients || [];
+            if (clients.length === 0) {
+                alert('No client data to export');
+                return;
+            }
+            
+            let csv = 'Client MAC,Name,AP MAC,AP Name,SSID,Device Type,OS,Degraded,Total,Impact %\\n';
+            clients.forEach(client => {
+                const mac = client.mac || '';
+                const name = (client.name || '').replace(/"/g, '""');
+                const apMac = client.ap_mac || '';
+                const apName = (client.ap_name || '').replace(/"/g, '""');
+                const ssid = (client.ssid || '').replace(/"/g, '""');
+                const deviceType = client.device_type || '';
+                const deviceOs = client.device_os || '';
+                const degraded = client.degraded || 0;
+                const total = client.total || 0;
+                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
+                
+                csv += `"${mac}","${name}","${apMac}","${apName}","${ssid}","${deviceType}","${deviceOs}",${degraded},${total},${pct}\\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${siteName}_${currentClassifierName}_Clients.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
 
         // Render skeleton cards for all known metrics immediately
