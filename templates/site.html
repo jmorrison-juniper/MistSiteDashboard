@@ -658,10 +658,9 @@
             const duration = document.getElementById('durationSelector').value;
             const url = `/api/sites/${siteId}/sle/${category}/csv?duration=${duration}`;
             
-            // Trigger download via hidden link
+            // Trigger download via hidden link (filename set by server Content-Disposition header)
             const link = document.createElement('a');
             link.href = url;
-            link.download = `sle_${category}_${siteId}_${duration}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

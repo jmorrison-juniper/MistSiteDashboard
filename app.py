@@ -967,6 +967,13 @@ def export_sle_csv(site_id, category):
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
+        
+        # Get site name for the filename
+        site_info = mist.get_site_info(site_id)
+        site_name = site_info.get("name", site_id)
+        # Sanitize site name for filename (remove special chars, replace spaces)
+        safe_site_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in site_name)
+        
         data = mist.get_sle_details(site_id, category, duration)
         
         # Build CSV content
@@ -1009,7 +1016,7 @@ def export_sle_csv(site_id, category):
         csv_content = output.getvalue()
         output.close()
         
-        filename = f"sle_{category}_{site_id}_{duration}.csv"
+        filename = f"sle_{category}_{safe_site_name}_{duration}.csv"
         
         return Response(
             csv_content,

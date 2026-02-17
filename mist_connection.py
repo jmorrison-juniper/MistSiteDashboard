@@ -279,6 +279,31 @@ class MistConnection:
             logger.error(f"Error fetching sites: {error}")
             raise
     
+    def get_site_info(self, site_id: str) -> Dict[str, Any]:
+        """
+        Get basic information for a single site.
+        
+        Args:
+            site_id: UUID of the site to query
+        
+        Returns:
+            dict: Site information including name, address, timezone
+        """
+        try:
+            session = self._get_session()
+            response = mistapi.api.v1.sites.sites.getSiteInfo(session, site_id)
+            site_data = response.data if hasattr(response, "data") else response
+            return {
+                "id": site_data.get("id"),
+                "name": site_data.get("name", "Unknown"),
+                "address": site_data.get("address", ""),
+                "country_code": site_data.get("country_code", ""),
+                "timezone": site_data.get("timezone", "")
+            }
+        except Exception as error:
+            logger.error(f"Error fetching site info: {error}")
+            raise
+    
     # =========================================================================
     # DEVICE HEALTH METHODS
     # =========================================================================
@@ -869,12 +894,19 @@ class MistConnection:
         try:
             session = self._get_session()
             
+            # Determine scope based on metric type
+            # WAN metrics (gateway-*) use 'site' scope with site_id
+            # Switch metrics (switch-*) would use 'switch' scope
+            # WiFi metrics use 'site' scope
+            scope = "site"
+            scope_id = site_id
+            
             # Build kwargs for API call
             base_kwargs: Dict[str, Any] = {
                 "mist_session": session,
                 "site_id": site_id,
-                "scope": "site",
-                "scope_id": site_id,
+                "scope": scope,
+                "scope_id": scope_id,
                 "metric": metric,
                 "duration": duration
             }
@@ -902,6 +934,11 @@ class MistConnection:
             
             raw_items = data.get(response_key, [])
             total_count = data.get("total_count", len(raw_items))
+            
+            # Debug: Log raw item fields to understand API response format
+            if raw_items:
+                logger.info(f"WAN Impact Debug [{item_type}]: First raw item keys: {list(raw_items[0].keys())}")
+                logger.info(f"WAN Impact Debug [{item_type}]: First raw item: {raw_items[0]}")
             
             # Calculate failure rate and overall impact for each item
             total_degraded_all = sum(item.get("degraded", 0) for item in raw_items)
