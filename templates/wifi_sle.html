@@ -295,40 +295,59 @@
         }
         
         .impact-detail-table {
-            font-size: 0.85rem;
-            table-layout: auto;
+            font-size: 0.8rem;
+            table-layout: fixed;
             width: 100%;
+            word-wrap: break-word;
         }
         
         .impact-detail-table th {
             background-color: var(--bg-card-header);
             font-weight: 600;
-            white-space: nowrap;
-            position: sticky;
-            top: 0;
-            z-index: 1;
+            white-space: normal;
+            word-wrap: break-word;
+            padding: 0.4rem 0.3rem;
+            font-size: 0.75rem;
         }
         
         .impact-detail-table td {
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        
-        .impact-detail-table td:hover {
-            overflow: visible;
             white-space: normal;
-            word-break: break-word;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            padding: 0.3rem 0.25rem;
+            vertical-align: middle;
         }
         
         .impact-detail-table code {
-            font-size: 0.8rem;
+            font-size: 0.7rem;
+            word-break: break-all;
         }
         
-        .table-responsive-wrapper {
-            overflow-x: auto;
-            max-height: 60vh;
+        /* Responsive: smaller screens */
+        @media (max-width: 768px) {
+            .impact-detail-table {
+                font-size: 0.7rem;
+            }
+            .impact-detail-table th,
+            .impact-detail-table td {
+                padding: 0.2rem 0.15rem;
+            }
+            .impact-detail-table code {
+                font-size: 0.6rem;
+            }
+            /* Hide less critical columns on mobile */
+            .impact-detail-table .col-hide-mobile {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .impact-detail-table {
+                font-size: 0.65rem;
+            }
+            .impact-detail-table th {
+                font-size: 0.6rem;
+            }
         }
         
         .impact-pct {
@@ -1076,15 +1095,19 @@
             
             const columns = getOrderedColumns(items);
             
-            // Build header row - wrap in responsive container
-            let html = `<div class="table-responsive-wrapper">
+            // Columns to hide on mobile (less critical info)
+            const mobileHideCols = new Set(['ap_mac', 'wlan_id', 'duration', 'device_os']);
+            
+            // Build header row
+            let html = `
                 <table class="table table-dark table-sm impact-detail-table">
                     <thead>
                         <tr>
             `;
             
             columns.forEach(col => {
-                html += `<th>${formatColumnHeader(col)}</th>`;
+                const hideClass = mobileHideCols.has(col) ? ' class="col-hide-mobile"' : '';
+                html += `<th${hideClass}>${formatColumnHeader(col)}</th>`;
             });
             html += `<th>Impact %</th></tr></thead><tbody>`;
             
@@ -1102,20 +1125,21 @@
                 columns.forEach(col => {
                     const val = item[col];
                     let displayVal = val !== null && val !== undefined ? val : '-';
+                    const hideClass = mobileHideCols.has(col) ? ' class="col-hide-mobile"' : '';
                     
                     // Format MAC addresses with monospace
                     if (col === 'mac' || col.endsWith('_mac')) {
-                        html += `<td><code>${displayVal}</code></td>`;
+                        html += `<td${hideClass}><code>${displayVal}</code></td>`;
                     } else if (typeof displayVal === 'number') {
-                        html += `<td>${displayVal.toLocaleString()}</td>`;
+                        html += `<td${hideClass}>${displayVal.toLocaleString()}</td>`;
                     } else {
-                        html += `<td>${displayVal}</td>`;
+                        html += `<td${hideClass}>${displayVal}</td>`;
                     }
                 });
                 html += `<td><span class="impact-pct ${pctClass}">${pct}%</span></td></tr>`;
             });
             
-            html += '</tbody></table></div>';
+            html += '</tbody></table>';
             return html;
         }
         
@@ -1196,7 +1220,7 @@
     
     <!-- Impact Details Modal -->
     <div class="modal fade" id="impactModal" tabindex="-1" aria-labelledby="impactModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="impactModalLabel">Affected Devices</h5>
