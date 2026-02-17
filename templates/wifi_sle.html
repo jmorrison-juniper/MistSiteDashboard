@@ -820,7 +820,52 @@
         }
 
         // Download impact data for a specific tab as CSV
-        function downloadImpactCsv(dataKey, nameKey, nameLabel) {
+        // Convert snake_case/camelCase to Title Case for display
+        function formatColumnHeader(key) {
+            return key
+                .replace(/_/g, ' ')
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // Get ordered columns from items, prioritizing important fields first
+        function getOrderedColumns(items) {
+            if (!items || items.length === 0) return [];
+            
+            // Collect all unique keys from all items
+            const allKeys = new Set();
+            items.forEach(item => {
+                Object.keys(item).forEach(key => allKeys.add(key));
+            });
+            
+            // Priority ordering for common fields
+            const priorityOrder = ['name', 'mac', 'ap_name', 'ap_mac', 'ssid', 
+                                   'device_type', 'device_os', 'band', 'wlan_id',
+                                   'degraded', 'duration', 'total'];
+            
+            // Hidden fields we don't want to display
+            const hiddenFields = new Set(['failure_rate', 'overall_impact']);
+            
+            const ordered = [];
+            
+            // Add priority fields first (if they exist in data)
+            priorityOrder.forEach(key => {
+                if (allKeys.has(key) && !hiddenFields.has(key)) {
+                    ordered.push(key);
+                    allKeys.delete(key);
+                }
+            });
+            
+            // Add remaining fields alphabetically
+            Array.from(allKeys).filter(k => !hiddenFields.has(k)).sort().forEach(key => {
+                ordered.push(key);
+            });
+            
+            return ordered;
+        }
+
+        // Dynamic CSV export - auto-discovers all columns
+        function downloadDynamicCsv(dataKey) {
             if (!currentImpactData || !currentImpactData[dataKey]) {
                 alert('No data available to export');
                 return;
@@ -832,15 +877,26 @@
                 return;
             }
             
+            const columns = getOrderedColumns(items);
             const safeClassifier = currentClassifierName.replace(/[^a-zA-Z0-9_-]/g, '_');
-            let csv = `${nameLabel},Degraded,Total,Impact %\n`;
             
+            // Header row
+            let csv = columns.map(formatColumnHeader).join(',') + ',Impact %\n';
+            
+            // Data rows
             items.forEach(item => {
-                const name = item[nameKey] || 'Unknown';
                 const degraded = item.degraded || 0;
                 const total = item.total || 0;
                 const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
-                csv += `"${name}",${degraded},${total},${pct}\n`;
+                
+                const row = columns.map(col => {
+                    const val = item[col];
+                    if (val === null || val === undefined) return '';
+                    if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+                    return val;
+                });
+                row.push(pct);
+                csv += row.join(',') + '\n';
             });
             
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -911,7 +967,7 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#apsTab">APs (${aps.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="apsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('aps', 'name', 'AP Name')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('aps')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
                     ${renderImpactTable(aps, 'name', 'AP Name')}</div>`;
                 firstTab = false;
@@ -921,7 +977,7 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#wlansTab">WLANs (${wlans.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="wlansTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('wlans', 'name', 'WLAN Name')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('wlans')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
                     ${renderImpactTable(wlans, 'name', 'WLAN Name')}</div>`;
                 firstTab = false;
@@ -931,7 +987,7 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceTypesTab">Device Types (${deviceTypes.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceTypesTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('device_types', 'name', 'Device Type')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('device_types')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
                     ${renderImpactTable(deviceTypes, 'name', 'Device Type')}</div>`;
                 firstTab = false;
@@ -941,7 +997,7 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#deviceOsTab">OS (${deviceOs.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="deviceOsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('device_os', 'name', 'Operating System')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('device_os')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
                     ${renderImpactTable(deviceOs, 'name', 'Operating System')}</div>`;
                 firstTab = false;
@@ -951,7 +1007,7 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#bandsTab">Bands (${bands.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="bandsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('bands', 'band', 'Band')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('bands')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
                     ${renderImpactTable(bands, 'band', 'Band')}</div>`;
                 firstTab = false;
@@ -962,9 +1018,9 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#clientsTab">Clients (${wirelessClients.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadClientsCsv()"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('wireless_clients')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
-                    ${renderClientsTable(wirelessClients)}</div>`;
+                    ${renderDynamicTable(wirelessClients)}</div>`;
                 firstTab = false;
             }
             
@@ -984,22 +1040,28 @@
             }
         }
         
-        function renderImpactTable(items, nameKey, nameLabel) {
+        // Dynamic table renderer - auto-discovers columns from data
+        function renderDynamicTable(items) {
+            if (!items || items.length === 0) {
+                return '<p class="text-muted">No data available</p>';
+            }
+            
+            const columns = getOrderedColumns(items);
+            
+            // Build header row
             let html = `
                 <table class="table table-dark table-sm impact-detail-table">
                     <thead>
                         <tr>
-                            <th>${nameLabel}</th>
-                            <th>Degraded</th>
-                            <th>Total</th>
-                            <th>Impact %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
             `;
             
+            columns.forEach(col => {
+                html += `<th>${formatColumnHeader(col)}</th>`;
+            });
+            html += `<th>Impact %</th></tr></thead><tbody>`;
+            
+            // Build data rows
             items.forEach(item => {
-                const name = item[nameKey] || 'Unknown';
                 const degraded = item.degraded || 0;
                 const total = item.total || 0;
                 const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
@@ -1008,105 +1070,30 @@
                 if (pct >= 10) pctClass = 'high';
                 else if (pct >= 5) pctClass = 'medium';
                 
-                html += `
-                    <tr>
-                        <td>${name}</td>
-                        <td>${degraded.toLocaleString()}</td>
-                        <td>${total.toLocaleString()}</td>
-                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
-                    </tr>
-                `;
+                html += '<tr>';
+                columns.forEach(col => {
+                    const val = item[col];
+                    let displayVal = val !== null && val !== undefined ? val : '-';
+                    
+                    // Format MAC addresses with monospace
+                    if (col === 'mac' || col.endsWith('_mac')) {
+                        html += `<td><code>${displayVal}</code></td>`;
+                    } else if (typeof displayVal === 'number') {
+                        html += `<td>${displayVal.toLocaleString()}</td>`;
+                    } else {
+                        html += `<td>${displayVal}</td>`;
+                    }
+                });
+                html += `<td><span class="impact-pct ${pctClass}">${pct}%</span></td></tr>`;
             });
             
             html += '</tbody></table>';
             return html;
         }
         
-        // Render wireless clients table with MAC, name, AP, SSID, device info
-        function renderClientsTable(clients) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead>
-                        <tr>
-                            <th>Client MAC</th>
-                            <th>Name</th>
-                            <th>AP Name</th>
-                            <th>SSID</th>
-                            <th>Device Type</th>
-                            <th>OS</th>
-                            <th>Degraded</th>
-                            <th>Total</th>
-                            <th>Impact %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            clients.forEach(client => {
-                const mac = client.mac || 'Unknown';
-                const name = client.name || '-';
-                const apName = client.ap_name || client.ap_mac || '-';
-                const ssid = client.ssid || '-';
-                const deviceType = client.device_type || '-';
-                const deviceOs = client.device_os || '-';
-                const degraded = client.degraded || 0;
-                const total = client.total || 0;
-                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
-                
-                let pctClass = 'low';
-                if (pct >= 10) pctClass = 'high';
-                else if (pct >= 5) pctClass = 'medium';
-                
-                html += `
-                    <tr>
-                        <td><code>${mac}</code></td>
-                        <td>${name}</td>
-                        <td>${apName}</td>
-                        <td>${ssid}</td>
-                        <td>${deviceType}</td>
-                        <td>${deviceOs}</td>
-                        <td>${degraded.toLocaleString()}</td>
-                        <td>${total.toLocaleString()}</td>
-                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
-                    </tr>
-                `;
-            });
-            
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        // Download wireless clients as CSV
-        function downloadClientsCsv() {
-            const clients = currentImpactData.wireless_clients || [];
-            if (clients.length === 0) {
-                alert('No client data to export');
-                return;
-            }
-            
-            let csv = 'Client MAC,Name,AP MAC,AP Name,SSID,Device Type,OS,Degraded,Total,Impact %\\n';
-            clients.forEach(client => {
-                const mac = client.mac || '';
-                const name = (client.name || '').replace(/"/g, '""');
-                const apMac = client.ap_mac || '';
-                const apName = (client.ap_name || '').replace(/"/g, '""');
-                const ssid = (client.ssid || '').replace(/"/g, '""');
-                const deviceType = client.device_type || '';
-                const deviceOs = client.device_os || '';
-                const degraded = client.degraded || 0;
-                const total = client.total || 0;
-                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
-                
-                csv += `"${mac}","${name}","${apMac}","${apName}","${ssid}","${deviceType}","${deviceOs}",${degraded},${total},${pct}\\n`;
-            });
-            
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${siteName}_${currentClassifierName}_Clients.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
+        // Legacy wrapper for backward compatibility
+        function renderImpactTable(items, nameKey, nameLabel) {
+            return renderDynamicTable(items);
         }
 
         // Render skeleton cards for all known metrics immediately
