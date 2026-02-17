@@ -919,7 +919,7 @@ class MistConnection:
                 "interfaces": (mistapi.api.v1.sites.sle.listSiteSleImpactedInterfaces, "interfaces"),
                 "applications": (mistapi.api.v1.sites.sle.listSiteSleImpactedApplications, "apps"),
                 "clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWiredClients, "clients"),
-                "wireless_clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWirelessClients, "clients"),
+                "wireless_clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWirelessClients, "users"),
             }
             
             if item_type not in api_map:
