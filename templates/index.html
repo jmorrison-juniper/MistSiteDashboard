@@ -1599,21 +1599,58 @@
             renderOrgSleTable();
         }
         
-        // Load org SLE data (initial load)
+        // All metrics by category for prefetching
+        const ALL_SLE_METRICS = {
+            wifi: ['time-to-connect', 'successful-connect', 'coverage', 'roaming', 'throughput', 'capacity', 'ap-health'],
+            wired: ['switch-health-v2', 'switch-stc', 'switch-throughput', 'switch-bandwidth'],
+            wan: ['gateway-health', 'wan-link-health', 'application-health', 'gateway-bandwidth']
+        };
+        
+        // Load org SLE data (initial load) - prefetches ALL metrics in background
         async function loadOrgSleData() {
             // Show org SLE section
             document.getElementById('orgSleSection').style.display = 'block';
-            
-            // Load WiFi with default metric (time-to-connect)
             document.getElementById('orgSleLoading').style.display = 'block';
             document.getElementById('orgSleContent').style.display = 'none';
             
+            // Load default metric first (WiFi time-to-connect) so user sees something immediately
             const success = await fetchOrgSleByMetric('wifi', 'time-to-connect');
             if (success) {
                 renderOrgSleTable();
                 document.getElementById('orgSleLoading').style.display = 'none';
                 document.getElementById('orgSleContent').style.display = 'block';
             }
+            
+            // Now prefetch ALL other metrics in the background (don't await - fire and forget)
+            console.log('Prefetching all SLE metrics in background...');
+            prefetchAllSleMetrics();
+        }
+        
+        // Prefetch all SLE metrics for all categories in background
+        async function prefetchAllSleMetrics() {
+            const promises = [];
+            
+            for (const [category, metrics] of Object.entries(ALL_SLE_METRICS)) {
+                for (const metric of metrics) {
+                    // Skip the default metric we already loaded
+                    if (category === 'wifi' && metric === 'time-to-connect') continue;
+                    
+                    // Fire off fetch (don't block on individual metrics)
+                    promises.push(
+                        fetchOrgSleByMetric(category, metric)
+                            .then(success => {
+                                console.log(`Prefetched ${category}/${metric}: ${success ? 'OK' : 'FAILED'}`);
+                            })
+                            .catch(err => {
+                                console.error(`Prefetch error ${category}/${metric}:`, err);
+                            })
+                    );
+                }
+            }
+            
+            // Wait for all prefetches to complete (in background)
+            await Promise.all(promises);
+            console.log('All SLE metrics prefetched');
         }
         
         // Initialize org SLE event listeners
