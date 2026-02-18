@@ -24,6 +24,22 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 ![Site Dashboard](docs/screenshots/Screenshot%202026-02-18%20100045.png)
 *Single site selected showing device health (APs, Switches, Gateways) and SLE metrics*
 
+### Client History
+
+![Wireless Client History](docs/screenshots/screenshot-04.png)
+*Wireless client history (last 7 days) showing sessions, unique clients, SSIDs, and connection details*
+
+![Wired Client History](docs/screenshots/screenshot-05.png)
+*Wired client history showing switch connections, hostnames, IPs, and session durations*
+
+### Gateway WAN Status
+
+![Gateway WAN Ports](docs/screenshots/screenshot-06.png)
+*Gateway WAN port configuration showing IP, interface, WAN type, and device details*
+
+![VPN & BGP Peers](docs/screenshots/screenshot-07.png)
+*Gateway VPN peer status with latency/jitter/loss/MOS metrics and BGP peer routing info*
+
 ### WiFi SLE Details
 
 ![WiFi SLE Details](docs/screenshots/Screenshot%202026-02-18%20100144.png)
