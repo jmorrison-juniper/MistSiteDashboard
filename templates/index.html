@@ -707,6 +707,7 @@
         /* Sortable column headers */
         .sortable-header {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
             white-space: nowrap;
         }
@@ -755,6 +756,12 @@
         /* Initially hidden elements (toggled by JS) */
         .initially-hidden {
             display: none;
+        }
+        
+        /* Subtle info icon for tooltips */
+        .info-icon-subtle {
+            font-size: 0.75rem;
+            opacity: 0.6;
         }
     </style>
 </head>
@@ -891,7 +898,7 @@
                     </div>
                 </div>
                 <!-- Wired Metrics (hidden by default) -->
-                <div id="wiredMetrics" class="sle-metrics-row" style="display: none;">
+                <div id="wiredMetrics" class="sle-metrics-row initially-hidden">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
                     <div class="sle-metric-card" data-metric="switch-health-v2" data-category="wired">Switch Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                     <div class="sle-metric-card active" data-metric="switch-stc" data-category="wired">Successful Connect <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
@@ -899,7 +906,7 @@
                     <div class="sle-metric-card" data-metric="switch-bandwidth" data-category="wired">Switch Bandwidth <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                 </div>
                 <!-- WAN Metrics (hidden by default) -->
-                <div id="wanMetrics" class="sle-metrics-row" style="display: none;">
+                <div id="wanMetrics" class="sle-metrics-row initially-hidden">
                     <span class="text-secondary small me-2 align-self-center">Sort by:</span>
                     <div class="sle-metric-card active" data-metric="gateway-health" data-category="wan">WAN Edge Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
                     <div class="sle-metric-card" data-metric="wan-link-health" data-category="wan">WAN Link Health <i class="bi bi-arrow-clockwise metric-refresh" title="Refresh"></i></div>
@@ -2102,7 +2109,7 @@
                 html += `
                     <div class="col-md-6">
                         <div class="sle-metric-row">
-                            <span class="sle-metric-name" ${description ? `title="${description}" data-bs-toggle="tooltip" data-bs-placement="top"` : ''}>${displayName}${description ? ' <i class="bi bi-info-circle" style="font-size: 0.75rem; opacity: 0.6;"></i>' : ''}</span>
+                            <span class="sle-metric-name" ${description ? `title="${description}" data-bs-toggle="tooltip" data-bs-placement="top"` : ''}>${displayName}${description ? ' <i class="bi bi-info-circle info-icon-subtle"></i>' : ''}</span>
                             <div class="sle-metric-bar">
                                 <div class="sle-metric-fill ${colorClass}" style="width: ${Math.min(value, 100)}%;"></div>
                             </div>

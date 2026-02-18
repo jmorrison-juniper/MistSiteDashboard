@@ -169,6 +169,11 @@
             opacity: 0.5;
         }
         
+        /* Error state icon */
+        .error-icon {
+            font-size: 3rem;
+        }
+        
         /* Initially hidden elements (toggled by JS) */
         .initially-hidden {
             display: none;
@@ -405,7 +410,7 @@
             } catch (error) {
                 console.error('Error loading data:', error);
                 document.getElementById('loadingMessage').innerHTML = `
-                    <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <i class="bi bi-exclamation-triangle text-danger error-icon"></i>
                     <p class="text-danger mt-3">Error loading data: ${error.message}</p>
                 `;
             } finally {

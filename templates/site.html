@@ -208,6 +208,20 @@
         .breadcrumb-item.active {
             color: var(--text-secondary);
         }
+        
+        /* Icon color utilities */
+        .icon-magenta { color: var(--tm-magenta); }
+        .icon-magenta-light { color: var(--tm-magenta-light); }
+        .icon-yellow { color: var(--accent-yellow); }
+        .icon-green { color: var(--accent-green); }
+        
+        /* Duration selector styling */
+        .duration-select {
+            width: auto;
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+            border-color: rgba(255,255,255,0.2);
+        }
     </style>
 </head>
 <body>
@@ -242,7 +256,7 @@
             <div class="col-md-4 mb-3">
                 <a href="/ap-clients/{{ site_id }}" class="text-decoration-none">
                     <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-wifi" style="color: var(--tm-magenta);"></i></div>
+                        <div class="health-icon"><i class="bi bi-wifi icon-magenta"></i></div>
                         <div class="health-count" id="apCount">-</div>
                         <div class="health-label">Access Points</div>
                         <div class="health-status">
@@ -257,7 +271,7 @@
             <div class="col-md-4 mb-3">
                 <a href="/switch-clients/{{ site_id }}" class="text-decoration-none">
                     <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-hdd-stack" style="color: var(--accent-yellow);"></i></div>
+                        <div class="health-icon"><i class="bi bi-hdd-stack icon-yellow"></i></div>
                         <div class="health-count" id="switchCount">-</div>
                         <div class="health-label">Switches</div>
                         <div class="health-status">
@@ -272,7 +286,7 @@
             <div class="col-md-4 mb-3">
                 <a href="/gateway-wan/{{ site_id }}" class="text-decoration-none">
                     <div class="card health-card">
-                        <div class="health-icon"><i class="bi bi-router" style="color: var(--accent-green);"></i></div>
+                        <div class="health-icon"><i class="bi bi-router icon-green"></i></div>
                         <div class="health-count" id="gatewayCount">-</div>
                         <div class="health-label">Gateways</div>
                         <div class="health-status">
@@ -289,7 +303,7 @@
         <!-- SLE Summary Cards -->
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>SLE Metrics</h5>
-            <select id="durationSelector" class="form-select form-select-sm" style="width: auto; background-color: var(--bg-card); color: var(--text-primary); border-color: rgba(255,255,255,0.2);">
+            <select id="durationSelector" class="form-select form-select-sm duration-select" title="Select time duration">
                 <option value="1h">Last 1 Hour</option>
                 <option value="3h">Last 3 Hours</option>
                 <option value="6h">Last 6 Hours</option>
@@ -305,7 +319,7 @@
                         <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wifi')" title="Download CSV">
                             <i class="bi bi-download"></i>
                         </button>
-                        <div class="sle-icon"><i class="bi bi-wifi" style="color: var(--tm-magenta);"></i></div>
+                        <div class="sle-icon"><i class="bi bi-wifi icon-magenta"></i></div>
                         <div class="sle-value" id="wifiSle">-</div>
                         <div class="sle-label">WiFi SLE</div>
                         <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
@@ -318,7 +332,7 @@
                         <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wired')" title="Download CSV">
                             <i class="bi bi-download"></i>
                         </button>
-                        <div class="sle-icon"><i class="bi bi-ethernet" style="color: var(--tm-magenta-light);"></i></div>
+                        <div class="sle-icon"><i class="bi bi-ethernet icon-magenta-light"></i></div>
                         <div class="sle-value" id="wiredSle">-</div>
                         <div class="sle-label">Wired SLE</div>
                         <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
@@ -331,7 +345,7 @@
                         <button class="btn btn-csv-download sle-csv-btn" onclick="downloadSleCsv(event, 'wan')" title="Download CSV">
                             <i class="bi bi-download"></i>
                         </button>
-                        <div class="sle-icon"><i class="bi bi-globe" style="color: var(--tm-magenta);"></i></div>
+                        <div class="sle-icon"><i class="bi bi-globe icon-magenta"></i></div>
                         <div class="sle-value" id="wanSle">-</div>
                         <div class="sle-label">WAN SLE</div>
                         <small class="text-secondary mt-2 d-block"><i class="bi bi-box-arrow-up-right me-1"></i>View Details</small>
@@ -341,7 +355,7 @@
         </div>
         
         <!-- Access Points Table -->
-        <h5 class="mb-3"><i class="bi bi-wifi me-2" style="color: var(--tm-magenta);"></i>Access Points</h5>
+        <h5 class="mb-3"><i class="bi bi-wifi me-2 icon-magenta"></i>Access Points</h5>
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-list-ul me-2"></i>AP Devices</span>
@@ -373,7 +387,7 @@
         </div>
         
         <!-- Switches Table -->
-        <h5 class="mb-3"><i class="bi bi-hdd-stack me-2" style="color: var(--accent-yellow);"></i>Switches</h5>
+        <h5 class="mb-3"><i class="bi bi-hdd-stack me-2 icon-yellow"></i>Switches</h5>
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-list-ul me-2"></i>Switch Devices</span>
@@ -403,7 +417,7 @@
         </div>
         
         <!-- Gateways Table -->
-        <h5 class="mb-3"><i class="bi bi-router me-2" style="color: var(--accent-green);"></i>Gateways</h5>
+        <h5 class="mb-3"><i class="bi bi-router me-2 icon-green"></i>Gateways</h5>
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-list-ul me-2"></i>Gateway Devices</span>
