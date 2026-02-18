@@ -8,19 +8,56 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
 
 ## Screenshots
 
-![Screenshot 1](docs/screenshots/screenshot-01.png)
+### Organization-Level Views
 
-![Screenshot 2](docs/screenshots/screenshot-02.png)
+![Org Dashboard - Site Selector](docs/screenshots/Screenshot%202026-02-18%20095919.png)
+*Org-Wide Mist Site Dashboard showing worst 100 sites with WiFi/Wired/WAN tabs*
 
-![Screenshot 3](docs/screenshots/screenshot-03.png)
+![Org WiFi Dashboard](docs/screenshots/Screenshot%202026-02-18%20095904.png)
+*Org-wide WiFi performance sorted by Time to Connect metric*
 
-![Screenshot 4](docs/screenshots/screenshot-04.png)
+![Org WAN Dashboard](docs/screenshots/Screenshot%202026-02-18%20100006.png)
+*Org-wide WAN performance showing WAN edge health, link health, and app health*
 
-![Screenshot 5](docs/screenshots/screenshot-05.png)
+### Site-Level Views
 
-![Screenshot 6](docs/screenshots/screenshot-06.png)
+![Site Dashboard](docs/screenshots/Screenshot%202026-02-18%20100045.png)
+*Single site selected showing device health (APs, Switches, Gateways) and SLE metrics*
 
-![Screenshot 7](docs/screenshots/screenshot-07.png)
+### WiFi SLE Details
+
+![WiFi SLE Details](docs/screenshots/Screenshot%202026-02-18%20100144.png)
+*Full WiFi SLE page with AP availability, coverage, throughput, roaming, and classifier breakdowns*
+
+![WiFi Interference - Device Types](docs/screenshots/Screenshot%202026-02-18%20100323.png)
+*Pop-up showing device categories (iOS, iPad, etc.) affected by WiFi interference*
+
+![WiFi Interference - Clients](docs/screenshots/Screenshot%202026-02-18%20100239.png)
+*Pop-up showing individual clients suffering WiFi interference with degraded duration and impact %*
+
+### WAN SLE Details
+
+![WAN SLE Details](docs/screenshots/Screenshot%202026-02-18%20100505.png)
+*Full WAN SLE page with application health, gateway utilization, WAN link health, and classifiers*
+
+![WAN App Services - Interfaces](docs/screenshots/Screenshot%202026-02-18%20100526.png)
+*Pop-up showing gateway interfaces contributing to application disconnects*
+
+![WAN App Services - Applications](docs/screenshots/Screenshot%202026-02-18%20100608.png)
+*Pop-up showing affected applications with WAN health metrics and failure rates*
+
+### Wired SLE Details
+
+![Wired SLE Details](docs/screenshots/Screenshot%202026-02-18%20101004.png)
+*Full Wired SLE page with switch health, time to connect, throughput, and DHCP classifiers*
+
+![Wired DHCP - Affected Devices](docs/screenshots/Screenshot%202026-02-18%20101021.png)
+*Pop-up showing switches impacted by DHCP delays*
+
+### Data Export
+
+![CSV Export](docs/screenshots/Screenshot%202026-02-18%20100805.png)
+*CSV export of WAN SLE classifier data for offline analysis*
 
 ## Features
 
