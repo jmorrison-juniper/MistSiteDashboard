@@ -293,6 +293,9 @@ class MistConnection:
             session = self._get_session()
             response = mistapi.api.v1.sites.sites.getSiteInfo(session, site_id)
             site_data = response.data if hasattr(response, "data") else response
+            # Ensure we have a dict for type safety
+            if not isinstance(site_data, dict):
+                site_data = {}
             return {
                 "id": site_data.get("id"),
                 "name": site_data.get("name", "Unknown"),
