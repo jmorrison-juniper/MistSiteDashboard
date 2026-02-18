@@ -41,6 +41,8 @@ View device health and SLE (Service Level Experience) metrics for Juniper Mist s
   - **Detailed SLE Pages**: Click "Details" to view classifier breakdowns
     - Per-metric classifier analysis with impact events and duration
     - Impact visualization bars for quick problem identification
+    - Dynamic tables that auto-discover API columns (future-proof)
+    - Responsive mobile design with fullscreen modals
     - Export all classifier data to CSV
 - **Access Point Details**:
   - Connected WiFi clients per AP
@@ -261,6 +263,25 @@ MistSiteDashboard/
 
 ```json
 {
+  "26.02.17": {
+    "feature-additions": [
+      "Dynamic table rendering for all SLE impact details",
+      "Auto-discovery of API response columns (future-proof)",
+      "Responsive tables with mobile optimization",
+      "Fullscreen modals on mobile devices (md-down)",
+      "Column priority ordering for better visibility"
+    ],
+    "improvements": [
+      "WiFi SLE: Dynamic Affected APs/Clients tables",
+      "WAN SLE: Dynamic Gateways/Interfaces/Applications/Clients tables",
+      "Wired SLE: Dynamic Switches/Chassis tables",
+      "CSV export adapts to any returned columns",
+      "Mobile-friendly column hiding for narrow screens"
+    ],
+    "removed": [
+      "Hardcoded render functions replaced with renderDynamicTable()"
+    ]
+  },
   "26.02.13": {
     "feature-additions": [
       "Org-Wide Worst 100 Sites dashboard on main page",

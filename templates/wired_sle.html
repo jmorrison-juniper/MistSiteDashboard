@@ -293,11 +293,44 @@
         
         .impact-detail-table {
             font-size: 0.9rem;
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        .impact-detail-table th,
+        .impact-detail-table td {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            padding: 0.5rem;
+            vertical-align: top;
+            max-width: 200px;
         }
         
         .impact-detail-table th {
             background-color: var(--bg-card-header);
             font-weight: 600;
+        }
+
+        /* Responsive table container */
+        .table-responsive-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .impact-detail-table {
+                font-size: 0.75rem;
+            }
+            .impact-detail-table th,
+            .impact-detail-table td {
+                padding: 0.3rem;
+                max-width: 120px;
+            }
+            .col-hide-mobile {
+                display: none !important;
+            }
         }
         
         .impact-pct {
@@ -828,8 +861,93 @@
             URL.revokeObjectURL(url);
         }
 
-        // Download impact data for a specific tab as CSV
-        function downloadImpactCsv(dataKey) {
+        // Dynamic table helper functions
+        function formatColumnHeader(key) {
+            // Convert snake_case or camelCase to Title Case
+            return key
+                .replace(/_/g, ' ')
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function getOrderedColumns(items) {
+            if (!items || items.length === 0) return [];
+            
+            // Gather all unique keys from all items
+            const allKeys = new Set();
+            items.forEach(item => {
+                Object.keys(item).forEach(key => allKeys.add(key));
+            });
+            
+            // Priority columns to show first
+            const priorityOrder = ['name', 'switch_name', 'chassis_id', 'mac', 'model', 'role', 'duration', 'degraded', 'total', 'overall_impact', 'failure_rate'];
+            
+            // Columns to hide (internal or less useful)
+            const hiddenColumns = ['site_id', 'org_id', 'id', 'device_type'];
+            
+            const ordered = [];
+            // Add priority columns first
+            priorityOrder.forEach(key => {
+                if (allKeys.has(key) && !hiddenColumns.includes(key)) {
+                    ordered.push(key);
+                    allKeys.delete(key);
+                }
+            });
+            // Add remaining columns alphabetically
+            Array.from(allKeys)
+                .filter(key => !hiddenColumns.includes(key))
+                .sort()
+                .forEach(key => ordered.push(key));
+            
+            return ordered;
+        }
+
+        function renderDynamicTable(items) {
+            if (!items || items.length === 0) {
+                return '<p class="text-secondary">No data available</p>';
+            }
+            
+            const columns = getOrderedColumns(items);
+            
+            let html = '<div class="table-responsive-wrapper"><table class="table table-dark table-sm impact-detail-table"><thead><tr>';
+            columns.forEach((col, idx) => {
+                // Hide less important columns on mobile (after first 3)
+                const mobileClass = idx > 2 ? 'col-hide-mobile' : '';
+                html += `<th class="${mobileClass}">${formatColumnHeader(col)}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            items.forEach(item => {
+                html += '<tr>';
+                columns.forEach((col, idx) => {
+                    const mobileClass = idx > 2 ? 'col-hide-mobile' : '';
+                    let val = item[col];
+                    
+                    // Format specific value types
+                    if (val === null || val === undefined) {
+                        val = '-';
+                    } else if (typeof val === 'object') {
+                        val = JSON.stringify(val);
+                    } else if (col === 'duration' && typeof val === 'number') {
+                        // Convert duration from seconds to minutes
+                        val = (val / 60).toFixed(1) + ' min';
+                    } else if ((col === 'degraded' || col === 'failure_rate' || col === 'overall_impact') && typeof val === 'number') {
+                        const pctClass = val >= 10 ? 'high' : val >= 5 ? 'medium' : 'low';
+                        val = `<span class="impact-pct ${pctClass}">${val.toFixed(2)}%</span>`;
+                    } else if (col.includes('mac')) {
+                        val = `<code>${val}</code>`;
+                    }
+                    
+                    html += `<td class="${mobileClass}">${val}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function downloadDynamicCsv(dataKey) {
             if (!currentImpactData || !currentImpactData[dataKey]) {
                 alert('No data available to export');
                 return;
@@ -842,28 +960,26 @@
             }
             
             const safeClassifier = currentClassifierName.replace(/[^a-zA-Z0-9_-]/g, '_');
-            let csv = '';
+            const columns = getOrderedColumns(items);
             
-            if (dataKey === 'switches') {
-                csv = 'Switch Name,Model,Duration (min),Degraded %\n';
-                items.forEach(item => {
-                    const name = item.name || 'Unknown';
-                    const model = item.model || '';
-                    const duration = ((item.duration || 0) / 60).toFixed(1);
-                    const degraded = item.degraded || 0;
-                    csv += `"${name}","${model}",${duration},${degraded}\n`;
+            // Build CSV header
+            let csv = columns.map(col => `"${formatColumnHeader(col)}"`).join(',') + '\n';
+            
+            // Build CSV rows
+            items.forEach(item => {
+                const row = columns.map(col => {
+                    let val = item[col];
+                    if (val === null || val === undefined) {
+                        return '';
+                    } else if (typeof val === 'object') {
+                        return `"${JSON.stringify(val).replace(/"/g, '""')}"`;
+                    } else if (typeof val === 'string') {
+                        return `"${val.replace(/"/g, '""')}"`;
+                    }
+                    return val;
                 });
-            } else if (dataKey === 'chassis') {
-                csv = 'Switch Name,Module,Slot,Duration (min),Degraded %\n';
-                items.forEach(item => {
-                    const name = item.switch_name || 'Unknown';
-                    const module = item.module || '';
-                    const slot = item.slot || '';
-                    const duration = ((item.duration || 0) / 60).toFixed(1);
-                    const degraded = item.degraded || 0;
-                    csv += `"${name}","${module}","${slot}",${duration},${degraded}\n`;
-                });
-            }
+                csv += row.join(',') + '\n';
+            });
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
@@ -919,16 +1035,16 @@
             if (switches.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#switchesTab">Switches (${switches.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="switchesTab">
-                    <div class="mb-2 text-end"><button class="btn btn-sm btn-outline-success" onclick="downloadImpactCsv('switches')"><i class="bi bi-download"></i> CSV</button></div>
-                    ${renderSwitchImpactTable(switches)}</div>`;
+                    <div class="mb-2 text-end"><button class="btn btn-sm btn-outline-success" onclick="downloadDynamicCsv('switches')"><i class="bi bi-download"></i> CSV</button></div>
+                    ${renderDynamicTable(switches)}</div>`;
                 firstTab = false;
             }
             
             if (chassis.length > 0) {
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#chassisTab">Chassis (${chassis.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="chassisTab">
-                    <div class="mb-2 text-end"><button class="btn btn-sm btn-outline-success" onclick="downloadImpactCsv('chassis')"><i class="bi bi-download"></i> CSV</button></div>
-                    ${renderChassisImpactTable(chassis)}</div>`;
+                    <div class="mb-2 text-end"><button class="btn btn-sm btn-outline-success" onclick="downloadDynamicCsv('chassis')"><i class="bi bi-download"></i> CSV</button></div>
+                    ${renderDynamicTable(chassis)}</div>`;
                 firstTab = false;
             }
             
@@ -948,126 +1064,6 @@
             }
         }
         
-        function renderSwitchImpactTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead>
-                        <tr>
-                            <th>Switch Name</th>
-                            <th>Model</th>
-                            <th>Duration (min)</th>
-                            <th>Degraded %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            items.forEach(item => {
-                const name = item.name || 'Unknown';
-                const model = item.model || '';
-                const duration = item.duration || 0;
-                const degraded = item.degraded || 0;
-                const durationMin = (duration / 60).toFixed(1);
-                
-                let pctClass = 'low';
-                if (degraded >= 10) pctClass = 'high';
-                else if (degraded >= 5) pctClass = 'medium';
-                
-                html += `
-                    <tr>
-                        <td>${name}</td>
-                        <td>${model}</td>
-                        <td>${durationMin}</td>
-                        <td><span class="impact-pct ${pctClass}">${degraded.toFixed(2)}%</span></td>
-                    </tr>
-                `;
-            });
-            
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        function renderChassisImpactTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead>
-                        <tr>
-                            <th>Chassis ID</th>
-                            <th>Switch Name</th>
-                            <th>Role</th>
-                            <th>Duration (min)</th>
-                            <th>Degraded %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            items.forEach(item => {
-                const chassisId = item.chassis_id || item.chassis || '';
-                const switchName = item.switch_name || 'Unknown';
-                const role = item.role || '';
-                const duration = item.duration || 0;
-                const degraded = item.degraded || 0;
-                const durationMin = (duration / 60).toFixed(1);
-                
-                let pctClass = 'low';
-                if (degraded >= 10) pctClass = 'high';
-                else if (degraded >= 5) pctClass = 'medium';
-                
-                html += `
-                    <tr>
-                        <td>${chassisId}</td>
-                        <td>${switchName}</td>
-                        <td>${role}</td>
-                        <td>${durationMin}</td>
-                        <td><span class="impact-pct ${pctClass}">${degraded.toFixed(2)}%</span></td>
-                    </tr>
-                `;
-            });
-            
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        // Keep generic renderImpactTable for fallback compatibility
-        function renderImpactTable(items, nameKey, nameLabel) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead>
-                        <tr>
-                            <th>${nameLabel}</th>
-                            <th>Degraded</th>
-                            <th>Total</th>
-                            <th>Impact %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            items.forEach(item => {
-                const name = item[nameKey] || 'Unknown';
-                const degraded = item.degraded || 0;
-                const total = item.total || 0;
-                const pct = total > 0 ? ((degraded / total) * 100).toFixed(1) : 0;
-                
-                let pctClass = 'low';
-                if (pct >= 10) pctClass = 'high';
-                else if (pct >= 5) pctClass = 'medium';
-                
-                html += `
-                    <tr>
-                        <td>${name}</td>
-                        <td>${degraded.toLocaleString()}</td>
-                        <td>${total.toLocaleString()}</td>
-                        <td><span class="impact-pct ${pctClass}">${pct}%</span></td>
-                    </tr>
-                `;
-            });
-            
-            html += '</tbody></table>';
-            return html;
-        }
-
         // Render skeleton cards for all known metrics immediately
         function renderSkeletonCards() {
             const metrics = Object.keys(metricDisplayNames);
@@ -1140,7 +1136,7 @@
     
     <!-- Impact Details Modal -->
     <div class="modal fade" id="impactModal" tabindex="-1" aria-labelledby="impactModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="impactModalLabel">Affected Devices</h5>

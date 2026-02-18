@@ -291,12 +291,58 @@
         }
         
         .impact-detail-table {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
+            table-layout: fixed;
+            width: 100%;
+            word-wrap: break-word;
         }
         
         .impact-detail-table th {
             background-color: var(--bg-card-header);
             font-weight: 600;
+            white-space: normal;
+            word-wrap: break-word;
+            padding: 0.4rem 0.3rem;
+            font-size: 0.75rem;
+        }
+        
+        .impact-detail-table td {
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            padding: 0.3rem 0.25rem;
+            vertical-align: middle;
+        }
+        
+        .impact-detail-table code {
+            font-size: 0.7rem;
+            word-break: break-all;
+        }
+        
+        /* Responsive: smaller screens */
+        @media (max-width: 768px) {
+            .impact-detail-table {
+                font-size: 0.7rem;
+            }
+            .impact-detail-table th,
+            .impact-detail-table td {
+                padding: 0.2rem 0.15rem;
+            }
+            .impact-detail-table code {
+                font-size: 0.6rem;
+            }
+            .impact-detail-table .col-hide-mobile {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .impact-detail-table {
+                font-size: 0.65rem;
+            }
+            .impact-detail-table th {
+                font-size: 0.6rem;
+            }
         }
         
         .impact-pct {
@@ -829,53 +875,125 @@
             URL.revokeObjectURL(url);
         }
 
-        // Download impact data for a specific tab as CSV
-        function downloadImpactCsv(type) {
-            if (!currentImpactData || !currentImpactData[type]) {
+        // Convert snake_case/camelCase to Title Case for display
+        function formatColumnHeader(key) {
+            return key
+                .replace(/_/g, ' ')
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // Get ordered columns from items, prioritizing important fields first
+        function getOrderedColumns(items) {
+            if (!items || items.length === 0) return [];
+            
+            const allKeys = new Set();
+            items.forEach(item => {
+                Object.keys(item).forEach(key => allKeys.add(key));
+            });
+            
+            const priorityOrder = ['name', 'mac', 'gateway_name', 'gateway_mac', 'interface_name',
+                                   'gateway_model', 'gateway_version', 'app', 'src_ip',
+                                   'degraded', 'total'];
+            const hiddenFields = new Set(['failure_rate', 'overall_impact', 'gateways']);
+            
+            const ordered = [];
+            priorityOrder.forEach(key => {
+                if (allKeys.has(key) && !hiddenFields.has(key)) {
+                    ordered.push(key);
+                    allKeys.delete(key);
+                }
+            });
+            
+            Array.from(allKeys).filter(k => !hiddenFields.has(k)).sort().forEach(key => {
+                ordered.push(key);
+            });
+            
+            return ordered;
+        }
+
+        // Dynamic table renderer - auto-discovers columns from data
+        function renderDynamicTable(items) {
+            if (!items || items.length === 0) {
+                return '<p class="text-muted">No data available</p>';
+            }
+            
+            const columns = getOrderedColumns(items);
+            const mobileHideCols = new Set(['gateway_mac', 'gateway_version', 'gateway_model']);
+            
+            let html = `
+                <table class="table table-dark table-sm impact-detail-table">
+                    <thead><tr>
+            `;
+            
+            columns.forEach(col => {
+                const hideClass = mobileHideCols.has(col) ? ' class="col-hide-mobile"' : '';
+                html += `<th${hideClass}>${formatColumnHeader(col)}</th>`;
+            });
+            html += `<th>Failure Rate</th></tr></thead><tbody>`;
+            
+            items.forEach(item => {
+                const failureRate = item.failure_rate || 0;
+                let pctClass = 'low';
+                if (failureRate >= 50) pctClass = 'high';
+                else if (failureRate >= 20) pctClass = 'medium';
+                
+                html += '<tr>';
+                columns.forEach(col => {
+                    const val = item[col];
+                    let displayVal = val !== null && val !== undefined ? val : '-';
+                    const hideClass = mobileHideCols.has(col) ? ' class="col-hide-mobile"' : '';
+                    
+                    if (col === 'mac' || col.endsWith('_mac')) {
+                        html += `<td${hideClass}><code>${displayVal}</code></td>`;
+                    } else if (typeof displayVal === 'number') {
+                        html += `<td${hideClass}>${displayVal.toLocaleString()}</td>`;
+                    } else {
+                        html += `<td${hideClass}>${displayVal}</td>`;
+                    }
+                });
+                html += `<td><span class="impact-pct ${pctClass}">${failureRate.toFixed(1)}%</span></td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Dynamic CSV export - auto-discovers all columns
+        function downloadDynamicCsv(dataKey) {
+            if (!currentImpactData || !currentImpactData[dataKey]) {
                 alert('No data available to export');
                 return;
             }
             
-            const items = currentImpactData[type];
+            const items = currentImpactData[dataKey];
             if (items.length === 0) {
                 alert('No data available to export');
                 return;
             }
             
-            let csv = '';
+            const columns = getOrderedColumns(items);
             const safeClassifier = currentClassifierName.replace(/[^a-zA-Z0-9_-]/g, '_');
             
-            // Define headers and field mappings for each type
-            if (type === 'gateways') {
-                csv = 'WAN Edge Name,MAC,Model,Version,Overall Impact (%),Failure Rate (%)\n';
-                items.forEach(item => {
-                    csv += `"${item.name || 'Unknown'}","${item.gateway_mac || ''}","${item.gateway_model || ''}","${item.gateway_version || ''}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
+            let csv = columns.map(formatColumnHeader).join(',') + ',Failure Rate %\n';
+            
+            items.forEach(item => {
+                const failureRate = item.failure_rate || 0;
+                const row = columns.map(col => {
+                    const val = item[col];
+                    if (val === null || val === undefined) return '';
+                    if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+                    return val;
                 });
-            } else if (type === 'interfaces') {
-                csv = 'Interface Name,Gateway,Gateway MAC,Overall Impact (%),Failure Rate (%)\n';
-                items.forEach(item => {
-                    csv += `"${item.interface_name || 'Unknown'}","${item.gateway_name || ''}","${item.gateway_mac || ''}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
-                });
-            } else if (type === 'applications') {
-                csv = 'Application,Degraded,Total,Overall Impact (%),Failure Rate (%)\n';
-                items.forEach(item => {
-                    csv += `"${item.name || item.app || 'Unknown'}",${item.degraded || 0},${item.total || 0},${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
-                });
-            } else if (type === 'clients') {
-                csv = 'Name/IP,MAC,Gateway,Interfaces,Overall Impact (%),Failure Rate (%)\n';
-                items.forEach(item => {
-                    const name = item.name || item.src_ip || 'Unknown';
-                    const gwList = (item.gateways || []).map(g => g.gateway_name).join('; ') || '';
-                    const ifList = (item.gateways || []).flatMap(g => g.interfaces || []).join('; ') || '';
-                    csv += `"${name}","${item.mac || ''}","${gwList}","${ifList}",${item.overall_impact?.toFixed(1) || 0},${item.failure_rate?.toFixed(1) || 0}\n`;
-                });
-            }
+                row.push(failureRate.toFixed(1));
+                csv += row.join(',') + '\n';
+            });
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `wan_${type}_${safeClassifier}_${siteName}.csv`;
+            a.download = `wan_${dataKey}_${safeClassifier}_${siteName}.csv`;
             a.click();
             URL.revokeObjectURL(url);
         }
@@ -942,9 +1060,9 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#gatewaysTab">WAN Edges (${gateways.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="gatewaysTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('gateways')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('gateways')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
-                    ${renderGatewaysTable(gateways)}</div>`;
+                    ${renderDynamicTable(gateways)}</div>`;
                 firstTab = false;
             }
             
@@ -952,9 +1070,9 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#interfacesTab">Interfaces (${interfaces.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="interfacesTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('interfaces')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('interfaces')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
-                    ${renderInterfacesTable(interfaces)}</div>`;
+                    ${renderDynamicTable(interfaces)}</div>`;
                 firstTab = false;
             }
             
@@ -962,9 +1080,9 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#applicationsTab">Applications (${applications.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="applicationsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('applications')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('applications')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
-                    ${renderApplicationsTable(applications)}</div>`;
+                    ${renderDynamicTable(applications)}</div>`;
                 firstTab = false;
             }
             
@@ -972,9 +1090,9 @@
                 tabsHtml += `<li class="nav-item"><a class="nav-link ${firstTab ? 'active' : ''}" data-bs-toggle="tab" href="#clientsTab">Clients (${clients.length})</a></li>`;
                 contentHtml += `<div class="tab-pane fade ${firstTab ? 'show active' : ''}" id="clientsTab">
                     <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadImpactCsv('clients')"><i class="bi bi-download me-1"></i>CSV</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadDynamicCsv('clients')"><i class="bi bi-download me-1"></i>CSV</button>
                     </div>
-                    ${renderClientsTable(clients)}</div>`;
+                    ${renderDynamicTable(clients)}</div>`;
                 firstTab = false;
             }
             
@@ -994,113 +1112,6 @@
             }
         }
         
-        function renderGatewaysTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead><tr>
-                        <th>WAN Edge Name</th>
-                        <th>MAC</th>
-                        <th>Model</th>
-                        <th>Version</th>
-                        <th>Overall Impact</th>
-                        <th>Failure Rate</th>
-                    </tr></thead><tbody>
-            `;
-            items.forEach(item => {
-                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
-                html += `<tr>
-                    <td>${item.name || 'Unknown'}</td>
-                    <td><code>${item.gateway_mac || '-'}</code></td>
-                    <td>${item.gateway_model || '-'}</td>
-                    <td>${item.gateway_version || '-'}</td>
-                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
-                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        function renderInterfacesTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead><tr>
-                        <th>Interface Name</th>
-                        <th>Gateway</th>
-                        <th>Gateway MAC</th>
-                        <th>Overall Impact</th>
-                        <th>Failure Rate</th>
-                    </tr></thead><tbody>
-            `;
-            items.forEach(item => {
-                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
-                html += `<tr>
-                    <td>${item.interface_name || 'Unknown'}</td>
-                    <td>${item.gateway_name || '-'}</td>
-                    <td><code>${item.gateway_mac || '-'}</code></td>
-                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
-                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        function renderApplicationsTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead><tr>
-                        <th>Application</th>
-                        <th>Degraded</th>
-                        <th>Total</th>
-                        <th>Overall Impact</th>
-                        <th>Failure Rate</th>
-                    </tr></thead><tbody>
-            `;
-            items.forEach(item => {
-                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
-                html += `<tr>
-                    <td>${item.name || item.app || 'Unknown'}</td>
-                    <td>${item.degraded?.toLocaleString() || 0}</td>
-                    <td>${item.total?.toLocaleString() || 0}</td>
-                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
-                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            return html;
-        }
-        
-        function renderClientsTable(items) {
-            let html = `
-                <table class="table table-dark table-sm impact-detail-table">
-                    <thead><tr>
-                        <th>Name/IP</th>
-                        <th>MAC</th>
-                        <th>Gateway</th>
-                        <th>Interfaces</th>
-                        <th>Overall Impact</th>
-                        <th>Failure Rate</th>
-                    </tr></thead><tbody>
-            `;
-            items.forEach(item => {
-                const pctClass = item.failure_rate >= 50 ? 'high' : item.failure_rate >= 20 ? 'medium' : 'low';
-                const name = item.name || item.src_ip || 'Unknown';
-                const gwList = (item.gateways || []).map(g => g.gateway_name).join(', ') || '-';
-                const ifList = (item.gateways || []).flatMap(g => g.interfaces || []).join(', ') || '-';
-                html += `<tr>
-                    <td>${name}</td>
-                    <td><code>${item.mac || '-'}</code></td>
-                    <td>${gwList}</td>
-                    <td>${ifList}</td>
-                    <td>${item.overall_impact?.toFixed(0) || 0}%</td>
-                    <td><span class="impact-pct ${pctClass}">${item.failure_rate?.toFixed(0) || 0}%</span></td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            return html;
-        }
-
         // Render skeleton cards for all known metrics immediately
         function renderSkeletonCards() {
             const metrics = Object.keys(metricDisplayNames);
@@ -1173,7 +1184,7 @@
     
     <!-- Impact Details Modal -->
     <div class="modal fade" id="impactModal" tabindex="-1" aria-labelledby="impactModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="impactModalLabel">Affected Devices</h5>
