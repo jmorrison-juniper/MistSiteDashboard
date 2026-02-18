@@ -261,45 +261,45 @@ This dashboard uses the following endpoints from the [mistapi Python SDK](https:
 
 ### Organization & Sites
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/self`                                       | Get current user info (for org detection)                    |
-| `GET /api/v1/orgs/:org_id`                               | Get organization details                                     |
-| `GET /api/v1/orgs/:org_id/sites`                         | List all sites in organization                               |
-| `GET /api/v1/sites/:site_id`                             | Get single site info                                         |
-| `GET /api/v1/orgs/:org_id/templates`                     | List WLAN templates (for SSID resolution)                    |
-| `GET /api/v1/orgs/:org_id/wlans`                         | List organization WLANs                                      |
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/v1/self` | Get current user info (for org detection) |
+| `GET /api/v1/orgs/:org_id` | Get organization details |
+| `GET /api/v1/orgs/:org_id/sites` | List all sites in organization |
+| `GET /api/v1/sites/:site_id` | Get single site info |
+| `GET /api/v1/orgs/:org_id/templates` | List WLAN templates (for SSID resolution) |
+| `GET /api/v1/orgs/:org_id/wlans` | List organization WLANs |
 
 ### Device Statistics
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/sites/:site_id/stats/devices`               | Get device statistics (APs, switches, gateways)              |
-| `GET /api/v1/sites/:site_id/stats/devices?type=gateway`  | Get gateway stats including WAN interface status (`if_stat`) |
-| `GET /api/v1/sites/:site_id/stats/wireless_clients`      | Get wireless client statistics                               |
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/v1/sites/:site_id/stats/devices` | Get device statistics (APs, switches, gateways) |
+| `GET /api/v1/sites/:site_id/stats/devices?type=gateway` | Get gateway stats including WAN interface status (`if_stat`) |
+| `GET /api/v1/sites/:site_id/stats/wireless_clients` | Get wireless client statistics |
 
 ### Client Data
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/sites/:site_id/clients/search`              | Search wireless clients                                      |
-| `GET /api/v1/sites/:site_id/clients/sessions/search`     | Search wireless client sessions                              |
-| `GET /api/v1/sites/:site_id/wired_clients/search`        | Search wired clients                                         |
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/v1/sites/:site_id/clients/search` | Search wireless clients |
+| `GET /api/v1/sites/:site_id/clients/sessions/search` | Search wireless client sessions |
+| `GET /api/v1/sites/:site_id/wired_clients/search` | Search wired clients |
 
 ### SLE Metrics & Classifiers
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metrics`| List available SLE metrics                                   |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/summary`| Get SLE summary scores                                       |
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metrics` | List available SLE metrics |
+| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/summary` | Get SLE summary scores |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/classifiers` | List SLE metric classifiers |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/classifier/:classifier` | Get classifier details |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impact-summary` | Get SLE impact summary |
 
 ### SLE Impacted Items
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
+| Endpoint | Description |
+| --- | --- |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/aps` | List impacted access points |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/gateways` | List impacted gateways |
 | `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/interfaces` | List impacted interfaces |
@@ -309,11 +309,11 @@ This dashboard uses the following endpoints from the [mistapi Python SDK](https:
 
 ### Org-Wide Insights
 
-| Endpoint                                                 | Description                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/orgs/:org_id/insights/worst-sites-by-sle`   | Org-wide worst sites by SLE metric                           |
-| `GET /api/v1/orgs/:org_id/stats/peer_paths/search`       | Search VPN peer path stats                                   |
-| `GET /api/v1/orgs/:org_id/stats/bgp_peers/search`        | Search BGP peer stats                                        |
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/v1/orgs/:org_id/insights/worst-sites-by-sle` | Org-wide worst sites by SLE metric |
+| `GET /api/v1/orgs/:org_id/stats/peer_paths/search` | Search VPN peer path stats |
+| `GET /api/v1/orgs/:org_id/stats/bgp_peers/search` | Search BGP peer stats |
 
 ## Architecture
 
