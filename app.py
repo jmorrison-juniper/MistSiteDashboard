@@ -36,7 +36,7 @@ Environment Variables:
 
 Author: Joseph Morrison <jmorrison@juniper.net>
 Version: 24.12.16.12.00
-License: MIT
+License: CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 Example:
     # Run the application directly

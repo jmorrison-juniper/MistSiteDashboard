@@ -31,7 +31,7 @@ Dependencies:
     - Standard library: os, time, logging, typing
 
 Author: Joseph Morrison <jmorrison@juniper.net>
-License: MIT
+License: CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 Example:
     from mist_connection import MistConnection

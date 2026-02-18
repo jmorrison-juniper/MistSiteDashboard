@@ -3,7 +3,7 @@
 View device health and SLE (Service Level Experience) metrics for Juniper Mist sites in a clean, modern web interface.
 
 ![Dashboard Preview](https://img.shields.io/badge/Status-Development-yellow)
-![License](https://img.shields.io/badge/License-MIT-blue)
+![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)
 ![Container](https://img.shields.io/badge/Container-ghcr.io-purple)
 
 ## Screenshots
