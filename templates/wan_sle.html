@@ -892,10 +892,13 @@
                 Object.keys(item).forEach(key => allKeys.add(key));
             });
             
-            const priorityOrder = ['name', 'mac', 'gateway_name', 'gateway_mac', 'interface_name',
-                                   'gateway_model', 'gateway_version', 'app', 'src_ip',
+            const priorityOrder = ['name', 'gateway_name', 'interface_name', 'app', 'src_ip',
                                    'degraded', 'total'];
-            const hiddenFields = new Set(['failure_rate', 'overall_impact', 'gateways']);
+            const hiddenFields = new Set([
+                'failure_rate', 'overall_impact', 'gateways',
+                'gateway_mac', 'mac',         // MACs not as useful when we have names
+                'site_id', 'org_id', 'id'     // Internal IDs
+            ]);
             
             const ordered = [];
             priorityOrder.forEach(key => {
@@ -919,7 +922,7 @@
             }
             
             const columns = getOrderedColumns(items);
-            const mobileHideCols = new Set(['gateway_mac', 'gateway_version', 'gateway_model']);
+            const mobileHideCols = new Set(['gateway_version', 'gateway_model', 'total']);
             
             let html = `
                 <table class="table table-dark table-sm impact-detail-table">

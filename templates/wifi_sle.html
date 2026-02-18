@@ -885,13 +885,17 @@
                 Object.keys(item).forEach(key => allKeys.add(key));
             });
             
-            // Priority ordering for common fields
-            const priorityOrder = ['name', 'mac', 'ap_name', 'ap_mac', 'ssid', 
-                                   'device_type', 'device_os', 'band', 'wlan_id',
+            // Priority ordering for common fields (human-readable first)
+            const priorityOrder = ['name', 'mac', 'ap_name', 'ssid', 
+                                   'device_type', 'device_os', 'band',
                                    'degraded', 'duration', 'total'];
             
-            // Hidden fields we don't want to display
-            const hiddenFields = new Set(['failure_rate', 'overall_impact']);
+            // Hidden fields we don't want to display (UUIDs, MACs redundant with names)
+            const hiddenFields = new Set([
+                'failure_rate', 'overall_impact',
+                'wlan_id', 'ap_mac', 'vlan_id',  // UUIDs not useful to humans
+                'site_id', 'org_id', 'id'         // Internal IDs
+            ]);
             
             const ordered = [];
             
@@ -1096,7 +1100,7 @@
             const columns = getOrderedColumns(items);
             
             // Columns to hide on mobile (less critical info)
-            const mobileHideCols = new Set(['ap_mac', 'wlan_id', 'duration', 'device_os']);
+            const mobileHideCols = new Set(['duration', 'device_os', 'band', 'total']);
             
             // Build header row
             let html = `
