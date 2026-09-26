@@ -350,7 +350,7 @@ MistSiteDashboard/
         └── container-build.yml  # Image build for app changes and pull requests
 ```
 
-The `container-build.yml` workflow calls the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). The caller pins a devtools release commit, and a comment names the release tag. A push to `main` that changes the app pushes one image with the `main`, short SHA, `latest`, and `YY.MM.DD.HH.MM` tags. A pull request builds the image but does not push it.
+The `container-build.yml` workflow calls the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). The caller pins a devtools release commit, and a comment names the release tag. A push to `main` that changes the app pushes one image with the `main`, short SHA, `latest`, and `YY.MM.DD.HH.MM` tags. A pull request builds the image but does not push it. Dependabot keeps the actions and the devtools pins up to date.
 
 ## Changelog
 
