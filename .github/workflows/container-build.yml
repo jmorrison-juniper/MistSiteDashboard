@@ -1,5 +1,8 @@
 name: Build and Push Container
 
+# One workflow builds the image. The paths list names each file that the
+# Dockerfile copies, plus the build files, so a change to the documentation
+# builds nothing.
 on:
   push:
     branches: [main]
@@ -9,6 +12,18 @@ on:
       - 'requirements.txt'
       - 'Dockerfile'
       - 'templates/**'
+      - 'zscaler-root-ca.crt'
+      - '.github/workflows/container-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app.py'
+      - 'mist_connection.py'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - 'templates/**'
+      - 'zscaler-root-ca.crt'
+      - '.github/workflows/container-build.yml'
   workflow_dispatch:
     inputs:
       version_override:
@@ -16,13 +31,14 @@ on:
         required: false
         default: ''
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   # First job: Validate Python syntax before building
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,10 +62,11 @@ jobs:
           python -c "import ast; ast.parse(open('mist_connection.py').read())"
           echo "AST parse passed"
 
-  # Second job: Build and push container (only if validation passes). The
-  # shared workflow in misthelper-devtools builds the image with Buildx, pushes
-  # it to ghcr.io/<owner>/<repo>, and tags it with the version and latest. The
-  # version is YY.MM.DD.HH.MM in UTC unless version_override is set.
+  # Second job: Build the container, and push it except for a pull request.
+  # The shared workflow in misthelper-devtools builds the multi-arch image with
+  # Buildx and pushes it to ghcr.io/<owner>/<repo>. A push to main gets the
+  # branch, short SHA, latest, and YY.MM.DD.HH.MM (UTC) tags. A manual start
+  # can set the version with version_override.
   build-and-push:
     needs: validate
     permissions:
@@ -58,7 +75,11 @@ jobs:
     uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@ca3659400847c35f5dac438c37fc5055c020910e # v0.2.0
     with:
       file: ./Dockerfile
+      push: ${{ github.event_name != 'pull_request' }}
       tags: |
-        type=raw,value=latest
+        type=ref,event=branch
+        type=ref,event=pr
+        type=sha,prefix=
+        type=raw,value=latest,enable={{is_default_branch}}
       version-tag: true
       version: ${{ github.event.inputs.version_override }}

@@ -347,11 +347,10 @@ MistSiteDashboard/
 ├── docker-compose.yml     # Container orchestration
 └── .github/
     └── workflows/
-        ├── build-and-push.yml   # Image build on each push and pull request
-        └── container-build.yml  # Versioned image build for app changes
+        └── container-build.yml  # Image build for app changes and pull requests
 ```
 
-Both workflows call the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). Each caller pins a devtools release commit, and a comment names the release tag.
+The `container-build.yml` workflow calls the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). The caller pins a devtools release commit, and a comment names the release tag. A push to `main` that changes the app pushes one image with the `main`, short SHA, `latest`, and `YY.MM.DD.HH.MM` tags. A pull request builds the image but does not push it.
 
 ## Changelog
 
