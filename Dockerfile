@@ -1,7 +1,7 @@
 # MistSiteDashboard Container Image
 # Compatible with both Docker and Podman (OCI-compliant)
 # Multi-architecture: linux/amd64, linux/arm64
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Metadata following OCI standards
 LABEL org.opencontainers.image.title="MistSiteDashboard"
