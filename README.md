@@ -347,8 +347,11 @@ MistSiteDashboard/
 ├── docker-compose.yml     # Container orchestration
 └── .github/
     └── workflows/
-        └── build-and-push.yml  # CI/CD pipeline
+        ├── build-and-push.yml   # Image build on each push and pull request
+        └── container-build.yml  # Versioned image build for app changes
 ```
+
+Both workflows call the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). Each caller pins a devtools release commit, and a comment names the release tag.
 
 ## Changelog
 
