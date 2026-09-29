@@ -68,6 +68,6 @@ This plan adds an instrumentation layer to the Flask dashboard and its Mist API 
 - Compare benchmark outputs before and after optimization.
 
 ## Deliverables
-- Repo-local issue and tracking files under `specs/2449-mistsite-performance-monitoring/`
+- Repo-local issue and tracking files under `specs/014-mistsite-performance-monitoring/`
 - Initial measurement baseline for route and API-call cost
 - A concrete optimization-ready profile for future changes

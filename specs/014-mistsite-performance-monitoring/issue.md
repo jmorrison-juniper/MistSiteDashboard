@@ -1,5 +1,7 @@
 # Issue: MistSiteDashboard performance monitoring instrumentation
 
+Tracked in [issue #14](https://github.com/jmorrison-juniper/MistSiteDashboard/issues/14).
+
 ## Summary
 Add a thin, consistent performance-monitoring layer to the Flask dashboard and Mist API client so that all request paths and external API calls can be measured by latency, call count, payload size, and memory profile.
 
