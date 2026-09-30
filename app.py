@@ -41,7 +41,7 @@ License: CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)
 Example:
     # Run the application directly
     $ python app.py
-    
+
     # Or with environment variables
     $ PORT=8080 LOG_LEVEL=DEBUG python app.py
 """
@@ -56,12 +56,14 @@ import io
 import os
 import sys
 import logging
+import time
 from datetime import datetime
 from functools import wraps
 
 # Third-party imports
-from flask import Flask, Response, render_template, jsonify, request
+from flask import Flask, Response, g, got_request_exception, render_template, jsonify, request
 from dotenv import load_dotenv  # Loads environment variables from .env file
+from perf_monitor import emit_perf_event, finish_peak_trace, perf_enabled, start_peak_trace
 
 # =============================================================================
 # ENVIRONMENT CONFIGURATION
@@ -120,6 +122,85 @@ app = Flask(__name__)
 # Note: Random key means sessions won't persist across restarts
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 
+
+def _json_items_returned(response: Response) -> int | None:
+    """Infer a top-level list count from JSON responses without changing them."""
+    if not response.is_json or response.direct_passthrough or response.is_streamed:
+        return None
+    data = response.get_json(silent=True)
+    if isinstance(data, list):
+        return len(data)
+    if isinstance(data, dict):
+        for key in ("sites", "devices", "clients", "results", "items", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return len(value)
+        for value in data.values():
+            if isinstance(value, list):
+                return len(value)
+    return None
+
+
+@app.before_request
+def _start_request_perf_timer() -> None:
+    if not perf_enabled():
+        return
+    g.perf_start = time.perf_counter()
+    g.perf_trace_started = start_peak_trace()
+
+
+@got_request_exception.connect_via(app)
+def _capture_request_exception(sender, exception: Exception, **extra) -> None:
+    if perf_enabled():
+        g.perf_error_class = exception.__class__.__name__
+
+
+@app.after_request
+def _log_request_perf_event(response: Response) -> Response:
+    if not perf_enabled() or not hasattr(g, "perf_start"):
+        return response
+    route_rule = request.url_rule.rule if request.url_rule else request.path
+    emit_perf_event(
+        event_name="flask_route",
+        module=__name__,
+        function=request.endpoint,
+        route=route_rule,
+        method=request.method,
+        site_id=(request.view_args or {}).get("site_id"),
+        duration_ms=round((time.perf_counter() - g.perf_start) * 1000, 3),
+        items_returned=_json_items_returned(response),
+        payload_bytes=response.content_length,
+        status=response.status_code,
+        error_class=getattr(g, "perf_error_class", None),
+        peak_bytes=finish_peak_trace(getattr(g, "perf_trace_started", False)),
+        query_params=sorted(request.args.keys()),
+    )
+    g.perf_event_emitted = True
+    return response
+
+
+@app.teardown_request
+def _log_request_exception_perf_event(error: Exception | None) -> None:
+    if not perf_enabled() or error is None:
+        return
+    g.perf_error_class = error.__class__.__name__
+    if getattr(g, "perf_event_emitted", False) or not hasattr(g, "perf_start"):
+        return
+    route_rule = request.url_rule.rule if request.url_rule else request.path
+    emit_perf_event(
+        event_name="flask_route",
+        module=__name__,
+        function=request.endpoint,
+        route=route_rule,
+        method=request.method,
+        site_id=(request.view_args or {}).get("site_id"),
+        duration_ms=round((time.perf_counter() - g.perf_start) * 1000, 3),
+        status=500,
+        error_class=g.perf_error_class,
+        peak_bytes=finish_peak_trace(getattr(g, "perf_trace_started", False)),
+        query_params=sorted(request.args.keys()),
+    )
+
 # =============================================================================
 # MIST API CONNECTION MANAGEMENT
 # =============================================================================
@@ -136,14 +217,14 @@ _mist_connection: MistConnection | None = None
 def get_mist_connection() -> MistConnection:
     """
     Get or create a Mist API connection singleton.
-    
+
     This function implements lazy initialization of the MistConnection object.
     The connection is created on first use and reused for subsequent requests,
     which improves performance by maintaining a persistent API session.
-    
+
     Returns:
         MistConnection: Singleton instance of the Mist API connection handler.
-        
+
     Thread Safety:
         This implementation is not thread-safe. For multi-threaded deployments,
         consider using threading.Lock or Flask's application context.
@@ -162,13 +243,13 @@ def get_mist_connection() -> MistConnection:
 def index():
     """
     Render the main dashboard page.
-    
+
     This is the primary entry point for users. The page displays:
     - Site selector dropdown
     - Device health cards (APs, Switches, Gateways)
     - SLE metric summaries (WiFi, Wired, WAN)
     - Time range selector for SLE data
-    
+
     Returns:
         HTML: Rendered index.html template
     """
@@ -179,15 +260,15 @@ def index():
 def site_page(site_id):
     """
     Render the site-specific dashboard page.
-    
+
     Displays detailed information for a single site including:
     - Device health cards (APs, Switches, Gateways)
     - SLE metric summaries with links to detail pages
     - Device tables for all device types
-    
+
     Args:
         site_id: UUID of the site
-        
+
     Returns:
         HTML: Rendered site.html template
     """
@@ -202,11 +283,11 @@ def site_page(site_id):
 def test_connection():
     """
     Test the Mist API connection and return organization info.
-    
+
     This endpoint verifies that the API token is valid and can connect
     to the Mist Cloud. It also auto-detects the organization ID if not
     explicitly configured.
-    
+
     Returns:
         JSON: {
             "success": bool,
@@ -214,7 +295,7 @@ def test_connection():
             "org_name": str (on success),
             "error": str (on failure)
         }
-        
+
     Status Codes:
         200: Connection successful
         400: Connection failed (invalid credentials or permissions)
@@ -223,21 +304,21 @@ def test_connection():
     try:
         mist = get_mist_connection()
         result = mist.test_connection()
-        
+
         if result["success"]:
             logger.info("Mist API connection test successful")
             return jsonify({
-                "success": True, 
-                "message": "Connected to Mist API successfully", 
+                "success": True,
+                "message": "Connected to Mist API successfully",
                 "org_name": result.get("org_name", "Unknown")
             })
         else:
             logger.warning(f"Mist API connection test failed: {result.get('error', 'Unknown error')}")
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": result.get("error", "Connection failed")
             }), 400
-            
+
     except Exception as error:
         logger.error(f"Connection test error: {error}")
         return jsonify({"success": False, "error": str(error)}), 500
@@ -247,10 +328,10 @@ def test_connection():
 def get_sites():
     """
     Get list of all sites in the organization.
-    
+
     Retrieves all sites associated with the configured organization.
     Sites are sorted alphabetically by name for consistent display.
-    
+
     Returns:
         JSON: {
             "success": bool,
@@ -262,7 +343,7 @@ def get_sites():
                 "timezone": str
             }, ...]
         }
-        
+
     Status Codes:
         200: Sites retrieved successfully
         500: Server error during retrieval
@@ -281,18 +362,18 @@ def get_sites():
 def get_org_sle_insights(sle_type):
     """
     Get org-wide SLE insights for all sites by category.
-    
+
     Retrieves SLE (Service Level Experience) data for all sites in the
     organization, sorted with worst-performing sites first. This enables
     a "Worst 100 Sites" dashboard view.
-    
+
     Args:
         sle_type: SLE category to retrieve. Valid values: "wifi", "wired", "wan"
-        
+
     Query Parameters:
         duration: Time range for metrics (default: "1d")
                   Valid values: "1d", "7d", "2w"
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -308,7 +389,7 @@ def get_org_sle_insights(sle_type):
                 ... (SLE metrics specific to category)
             }, ...]
         }
-        
+
     Status Codes:
         200: SLE data retrieved successfully
         400: Invalid sle_type parameter
@@ -317,12 +398,12 @@ def get_org_sle_insights(sle_type):
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
-        
+
         # Validate duration parameter
         valid_durations = ["1d", "7d", "2w"]
         if duration not in valid_durations:
             duration = "1d"
-            
+
         # Validate SLE type parameter
         valid_types = ["wifi", "wired", "wan"]
         if sle_type not in valid_types:
@@ -330,16 +411,16 @@ def get_org_sle_insights(sle_type):
                 "success": False,
                 "error": f"Invalid sle_type '{sle_type}'. Must be one of: {valid_types}"
             }), 400
-            
+
         result = mist.get_org_sle_insights(sle_type, duration=duration)
-        
+
         if result["success"]:
             logger.info(f"Retrieved org SLE insights for {sle_type} (found {len(result['sites'])} sites)")
             return jsonify(result)
         else:
             logger.warning(f"Failed to get org SLE insights: {result.get('error', 'Unknown error')}")
             return jsonify(result), 500
-            
+
     except Exception as error:
         logger.error(f"Error fetching org SLE insights for {sle_type}: {error}")
         return jsonify({"success": False, "error": str(error)}), 500
@@ -349,18 +430,18 @@ def get_org_sle_insights(sle_type):
 def get_org_sle_by_metric(sle_type, metric):
     """
     Get org-wide worst sites for a SPECIFIC SLE metric.
-    
+
     Uses the worst-sites-by-sle-filtered API endpoint which returns sites
     sorted by worst performance for a specific metric. This is the correct
     endpoint for per-metric sorted data.
-    
+
     Args:
         sle_type: SLE category (wifi, wired, wan) - for validation
         metric: Specific SLE metric name (e.g., time-to-connect, coverage)
-        
+
     Query Parameters:
         duration: Time range (1h, 3h, 6h, 12h, 1d, 7d) - default "1d"
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -372,31 +453,31 @@ def get_org_sle_by_metric(sle_type, metric):
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
-        
+
         # Validate metric belongs to the category
         valid_metrics = {
-            "wifi": ["time-to-connect", "successful-connect", "coverage", "roaming", 
+            "wifi": ["time-to-connect", "successful-connect", "coverage", "roaming",
                      "throughput", "capacity", "ap-health", "ap-availability"],
             "wired": ["switch-health-v2", "switch-stc", "switch-throughput", "switch-bandwidth"],
             "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
         }
-        
+
         if sle_type not in valid_metrics:
             return jsonify({
                 "success": False,
                 "error": f"Invalid sle_type: {sle_type}. Must be wifi, wired, or wan"
             }), 400
-        
+
         # Note: We don't strictly validate metric since API may support more
         result = mist.get_org_worst_sites_by_metric(metric, duration=duration)
-        
+
         if result["success"]:
             logger.info(f"Retrieved worst sites for metric {metric} (found {len(result['sites'])} sites)")
             return jsonify(result)
         else:
             logger.warning(f"Failed to get worst sites for {metric}: {result.get('error', 'Unknown error')}")
             return jsonify(result), 500
-            
+
     except Exception as error:
         logger.error(f"Error fetching worst sites for metric {metric}: {error}")
         return jsonify({"success": False, "error": str(error)}), 500
@@ -406,14 +487,14 @@ def get_org_sle_by_metric(sle_type, metric):
 def get_site_health(site_id):
     """
     Get health statistics for a specific site.
-    
+
     Retrieves device health metrics including connected/disconnected counts
     for APs, switches, and gateways. Also includes detailed device information
     such as model, IP, uptime, and firmware version.
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -424,7 +505,7 @@ def get_site_health(site_id):
                 "summary": {"total": int, "connected": int, "disconnected": int, "health_percentage": float}
             }
         }
-        
+
     Status Codes:
         200: Health data retrieved successfully
         500: Server error during retrieval
@@ -443,18 +524,18 @@ def get_site_health(site_id):
 def get_site_sle(site_id):
     """
     Get SLE (Service Level Experience) metrics for a specific site.
-    
+
     SLE metrics provide insight into the quality of service experienced by
     users across WiFi, wired, and WAN networks. Metrics are calculated by
     the Mist Cloud based on device telemetry.
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Query Parameters:
         duration: Time range for metrics (default: "1d")
                   Valid values: "10m", "1h", "today", "1d", "1w"
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -465,7 +546,7 @@ def get_site_sle(site_id):
             },
             "duration": str
         }
-        
+
     Status Codes:
         200: SLE data retrieved successfully
         500: Server error during retrieval
@@ -473,12 +554,12 @@ def get_site_sle(site_id):
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
-        
+
         # Validate duration parameter to prevent API errors
         valid_durations = ["10m", "1h", "today", "1d", "1w"]
         if duration not in valid_durations:
             duration = "1d"  # Default to 24 hours if invalid
-            
+
         sle_data = mist.get_site_sle(site_id, duration=duration)
         logger.info(f"Retrieved SLE data for site {site_id} (duration: {duration})")
         return jsonify({"success": True, "sle": sle_data, "duration": duration})
@@ -491,17 +572,17 @@ def get_site_sle(site_id):
 def get_site_devices(site_id):
     """
     Get device statistics for a specific site.
-    
+
     Retrieves detailed device information including CPU/memory utilization,
     connection status, firmware version, and device-specific metrics.
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Query Parameters:
         type: Filter devices by type (default: "all")
               Valid values: "all", "ap", "switch", "gateway"
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -518,7 +599,7 @@ def get_site_devices(site_id):
                 ...
             }, ...]
         }
-        
+
     Status Codes:
         200: Devices retrieved successfully
         500: Server error during retrieval
@@ -538,14 +619,14 @@ def get_site_devices(site_id):
 def get_wireless_client_sessions(site_id):
     """
     Get wireless client session history for the last 7 days.
-    
+
     Retrieves comprehensive wireless client data by merging information from
     multiple API sources (client stats, client search, session history) to
     provide the most complete view of wireless clients.
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -564,7 +645,7 @@ def get_wireless_client_sessions(site_id):
                 "is_connected": bool
             }, ...]
         }
-        
+
     Status Codes:
         200: Client data retrieved successfully
         500: Server error during retrieval
@@ -583,13 +664,13 @@ def get_wireless_client_sessions(site_id):
 def get_wired_clients(site_id):
     """
     Get wired client information for the last 7 days.
-    
+
     Retrieves wired client data including DHCP information, switch port
     assignments, and connection status from the Mist Cloud.
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -606,7 +687,7 @@ def get_wired_clients(site_id):
                 "port_id": str
             }, ...]
         }
-        
+
     Status Codes:
         200: Client data retrieved successfully
         500: Server error during retrieval
@@ -625,15 +706,15 @@ def get_wired_clients(site_id):
 def get_gateway_wan_status(site_id):
     """
     Get gateway WAN port status and configuration.
-    
+
     Retrieves comprehensive gateway information including:
     - WAN port status (up/down, IP, traffic stats)
     - VPN peer status (latency, jitter, loss, MOS)
     - BGP peer status (neighbor info, route counts)
-    
+
     Args:
         site_id: UUID of the site to query
-        
+
     Returns:
         JSON: {
             "success": bool,
@@ -648,7 +729,7 @@ def get_gateway_wan_status(site_id):
                 "bgp_peers": [{...}]
             }, ...]
         }
-        
+
     Status Codes:
         200: Gateway data retrieved successfully
         500: Server error during retrieval
@@ -671,13 +752,13 @@ def get_gateway_wan_status(site_id):
 def ap_clients_page(site_id):
     """
     Render the AP clients history page.
-    
+
     Displays a detailed table of wireless client sessions over the last 7 days,
     including signal strength, SSID, band, and connection history.
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered ap_clients.html template
     """
@@ -688,13 +769,13 @@ def ap_clients_page(site_id):
 def switch_clients_page(site_id):
     """
     Render the switch wired clients page.
-    
+
     Displays a detailed table of wired clients connected to switches,
     including port info, VLAN, and DHCP details.
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered switch_clients.html template
     """
@@ -705,13 +786,13 @@ def switch_clients_page(site_id):
 def gateway_wan_page(site_id):
     """
     Render the gateway WAN status page.
-    
+
     Displays detailed WAN port status, VPN peer metrics, and BGP peer
     information for all gateways at the site.
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered gateway_wan.html template
     """
@@ -726,15 +807,15 @@ def gateway_wan_page(site_id):
 def wifi_sle_page(site_id):
     """
     Render the WiFi SLE detail page.
-    
+
     Displays detailed WiFi SLE metrics including:
     - Coverage, Capacity, Time-to-Connect
     - Roaming, Throughput, AP Availability
     - Classifier breakdown with impact analysis
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered wifi_sle.html template
     """
@@ -745,15 +826,15 @@ def wifi_sle_page(site_id):
 def wired_sle_page(site_id):
     """
     Render the Wired SLE detail page.
-    
+
     Displays detailed Wired SLE metrics including:
     - Switch Health, Switch Throughput
     - Switch STC (Successful Time to Connect)
     - Classifier breakdown with impact analysis
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered wired_sle.html template
     """
@@ -764,15 +845,15 @@ def wired_sle_page(site_id):
 def wan_sle_page(site_id):
     """
     Render the WAN SLE detail page.
-    
+
     Displays detailed WAN SLE metrics including:
     - Gateway Health, WAN Link Health
     - Application Health, Gateway Bandwidth
     - Classifier breakdown with impact analysis
-    
+
     Args:
         site_id: UUID of the site (passed to template for API calls)
-        
+
     Returns:
         HTML: Rendered wan_sle.html template
     """
@@ -787,18 +868,18 @@ def wan_sle_page(site_id):
 def get_sle_details(site_id, category):
     """
     Get detailed SLE data for a specific category.
-    
+
     Retrieves comprehensive SLE information including all metrics for the
     category, their classifiers, and impact data for the detail pages.
-    
+
     Args:
         site_id: UUID of the site to query
         category: SLE category ("wifi", "wired", or "wan")
-        
+
     Query Parameters:
         duration: Time range for analysis (default: "1d")
                   Valid values: "1h", "1d", "1w"
-        
+
     Returns:
         JSON: {
             "category": str,
@@ -812,7 +893,7 @@ def get_sle_details(site_id, category):
                 }, ...
             }
         }
-        
+
     Status Codes:
         200: SLE details retrieved successfully
         500: Server error during retrieval
@@ -831,18 +912,18 @@ def get_sle_details(site_id, category):
 def get_classifier_impact(site_id, metric, classifier):
     """
     Get detailed impact data for a specific metric/classifier combination.
-    
+
     Retrieves breakdown of affected devices, WLANs, device types, etc.
     for a specific SLE classifier to help identify root causes.
-    
+
     Args:
         site_id: UUID of the site to query
         metric: SLE metric name (e.g., "coverage", "capacity")
         classifier: Classifier name (e.g., "client-usage", "interference")
-        
+
     Query Parameters:
         duration: Time range for analysis (default: "1d")
-        
+
     Returns:
         JSON: {
             "metric": str,
@@ -853,7 +934,7 @@ def get_classifier_impact(site_id, metric, classifier):
             "device_os": [{...}],
             "bands": [{...}]
         }
-        
+
     Status Codes:
         200: Impact data retrieved successfully
         500: Server error during retrieval
@@ -872,11 +953,11 @@ def get_classifier_impact(site_id, metric, classifier):
 def get_sle_impacted_items(site_id, metric, item_type):
     """
     Get detailed impacted items (Distribution/Affected Items) for an SLE metric.
-    
+
     Retrieves rich distribution data showing which gateways, interfaces,
     applications, or clients are affected by SLE degradation. Matches the
     Distribution and Affected Items tabs in Mist dashboard.
-    
+
     Args:
         site_id: UUID of the site to query
         metric: SLE metric name (e.g., 'wan-link-health', 'gateway-health')
@@ -886,11 +967,11 @@ def get_sle_impacted_items(site_id, metric, item_type):
             - 'applications': Applications with failure rates
             - 'clients': Wired clients affected
             - 'wireless_clients': Wireless clients affected
-        
+
     Query Parameters:
         duration: Time range (default: "1d"). Valid: "1d", "7d", "2w"
         classifier: Optional classifier filter (e.g., "network-latency")
-        
+
     Returns:
         JSON: {
             "total_count": int,
@@ -907,7 +988,7 @@ def get_sle_impacted_items(site_id, metric, item_type):
                 }, ...
             ]
         }
-        
+
     Status Codes:
         200: Impacted items retrieved successfully
         400: Invalid item_type
@@ -918,7 +999,7 @@ def get_sle_impacted_items(site_id, metric, item_type):
         return jsonify({
             "error": f"Invalid item_type '{item_type}'. Must be one of: {valid_types}"
         }), 400
-    
+
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
@@ -938,21 +1019,21 @@ def get_sle_impacted_items(site_id, metric, item_type):
 def export_sle_csv(site_id, category):
     """
     Export SLE data for a category as CSV.
-    
+
     Generates a CSV file containing all metrics and their classifiers
     for the specified SLE category (wifi, wired, or wan).
-    
+
     Args:
         site_id: UUID of the site to query
         category: SLE category ("wifi", "wired", or "wan")
-        
+
     Query Parameters:
         duration: Time range for analysis (default: "1d")
-        
+
     Returns:
         CSV file download with columns:
         - Metric, SLE Value (%), Classifier, Contribution (%), Impact Count
-        
+
     Status Codes:
         200: CSV generated successfully
         400: Invalid category
@@ -963,23 +1044,23 @@ def export_sle_csv(site_id, category):
         return jsonify({
             "error": f"Invalid category: {category}. Must be one of: {valid_categories}"
         }), 400
-    
+
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
-        
+
         # Get site name for the filename
         site_info = mist.get_site_info(site_id)
         site_name = site_info.get("name", site_id)
         # Sanitize site name for filename (remove special chars, replace spaces)
         safe_site_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in site_name)
-        
+
         data = mist.get_sle_details(site_id, category, duration)
-        
+
         # Build CSV content
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         # Write header
         writer.writerow([
             "Metric",
@@ -988,13 +1069,13 @@ def export_sle_csv(site_id, category):
             "Contribution (%)",
             "Impact Count"
         ])
-        
+
         # Flatten metrics and classifiers into rows
         metrics = data.get("metrics", {})
         for metric_name, metric_data in metrics.items():
             sle_value = metric_data.get("sle_value")
             sle_display = f"{sle_value:.1f}" if sle_value is not None else "N/A"
-            
+
             classifiers = metric_data.get("classifiers", [])
             if classifiers:
                 for classifier in classifiers:
@@ -1011,19 +1092,19 @@ def export_sle_csv(site_id, category):
             else:
                 # Metric with no classifiers - write single row
                 writer.writerow([metric_name, sle_display, "", "", ""])
-        
+
         # Generate response with CSV content
         csv_content = output.getvalue()
         output.close()
-        
+
         filename = f"sle_{category}_{safe_site_name}_{duration}.csv"
-        
+
         return Response(
             csv_content,
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
-        
+
     except Exception as error:
         logger.error(f"Error exporting SLE CSV: {error}")
         return jsonify({"error": str(error)}), 500
@@ -1037,17 +1118,17 @@ def export_sle_csv(site_id, category):
 def health_check():
     """
     Health check endpoint for container orchestration.
-    
+
     This endpoint is used by Docker/Kubernetes health probes to determine
     if the application is running and responsive. It returns a simple JSON
     response without requiring API connectivity.
-    
+
     Returns:
         JSON: {
             "status": "healthy",
             "timestamp": str (ISO 8601 format)
         }
-        
+
     Example:
         curl http://localhost:5000/health
         {"status": "healthy", "timestamp": "2024-12-16T12:00:00"}
@@ -1065,9 +1146,9 @@ if __name__ == "__main__":
     # FLASK_DEBUG: Enable debug mode (auto-reload, detailed errors)
     port = int(os.getenv("PORT", 5000))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    
+
     logger.info(f"Starting MistSiteDashboard on port {port}")
-    
+
     # Bind to 0.0.0.0 to accept connections from all interfaces
     # This is required for container deployments where localhost != host network
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host="0.0.0.0", port=port, debug=debug)  # nosec B104

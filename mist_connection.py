@@ -35,7 +35,7 @@ License: CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 Example:
     from mist_connection import MistConnection
-    
+
     mist = MistConnection()
     result = mist.test_connection()
     if result["success"]:
@@ -53,11 +53,22 @@ Example:
 import os
 import time
 import logging
+import inspect
 from typing import Dict, List, Optional, Any
 
 # Third-party imports
 # Juniper Mist API Python SDK (tmunzer/mistapi_python)
 import mistapi
+from perf_monitor import (
+    duration_ms_since,
+    emit_perf_event,
+    finish_peak_trace,
+    install_requests_response_hook,
+    instrument_mist_method,
+    perf_enabled,
+    stage,
+    start_peak_trace,
+)
 
 # =============================================================================
 # MODULE CONFIGURATION
@@ -76,99 +87,115 @@ logger = logging.getLogger(__name__)
 class MistConnection:
     """
     Manages connection to the Juniper Mist Cloud API.
-    
+
     This class provides a high-level interface for interacting with the Mist Cloud
     API. It handles authentication, session management, and provides methods for
     retrieving various types of data from sites and organizations.
-    
+
     Attributes:
         api_token (str): Mist API token for authentication
         api_host (str): Mist API host (e.g., api.mist.com, api.eu.mist.com)
         org_id (str): Organization ID to use for API calls
         session (mistapi.APISession): Cached API session object
-    
+
     Note:
         The session is lazily initialized on first API call to improve
         startup performance. Organization ID is auto-detected if not provided.
-    
+
     Example:
         mist = MistConnection()
         result = mist.test_connection()
         if result["success"]:
             print(f"Connected to: {result['org_name']}")
     """
-    
+
     def __init__(self):
         """
         Initialize Mist API connection with credentials from environment.
-        
+
         Reads configuration from environment variables:
             - MIST_APITOKEN: API token for authentication (required)
             - MIST_HOST: API host (default: api.mist.com)
             - MIST_ORG_ID: Organization ID (optional, auto-detected)
             - org_id: Legacy fallback for organization ID
-        
+
         The session is not created during initialization to allow for
         configuration changes before the first API call.
         """
         # Read credentials from environment
         self.api_token = os.getenv("MIST_APITOKEN")
         self.api_host = os.getenv("MIST_HOST", "api.mist.com")
-        
+
         # Support both MIST_ORG_ID and legacy org_id environment variables
         self.org_id = os.getenv("MIST_ORG_ID") or os.getenv("org_id")
-        
+
         # Session is lazily initialized on first API call
         self.session = None
-        
+
         # Warn if API token is not configured (will fail on first API call)
         if not self.api_token:
             logger.warning("MIST_APITOKEN not set in environment")
-        
+
     def _get_session(self) -> mistapi.APISession:
         """
         Get or create an API session (lazy initialization).
-        
+
         Implements lazy initialization of the API session. The session is
         created on first call and reused for subsequent requests to avoid
         repeated authentication overhead.
-        
+
         Returns:
             mistapi.APISession: Authenticated session object for API calls
-        
+
         Note:
             The session uses the configured api_host and api_token.
             If api_token is empty, API calls will fail with authentication errors.
         """
+        cache_hit = self.session is not None
+        trace_started = start_peak_trace()
+        start = time.perf_counter()
         if self.session is None:
             self.session = mistapi.APISession(
                 host=self.api_host,
                 apitoken=self.api_token or ""
             )
+        hook_installed = install_requests_response_hook(self.session)
+        if perf_enabled():
+            emit_perf_event(
+                event_name="mist_session",
+                module=__name__,
+                function="_get_session",
+                duration_ms=duration_ms_since(start),
+                processing_ms=duration_ms_since(start),
+                call_count=0,
+                cache_hit=cache_hit,
+                peak_bytes=finish_peak_trace(trace_started),
+                hook_installed=hook_installed,
+            )
         return self.session
-    
+
     # =========================================================================
     # CONNECTION AND ORGANIZATION METHODS
     # =========================================================================
-    
+
     def test_connection(self) -> Dict[str, Any]:
         """
         Test the API connection and return organization info.
-        
+
         This method verifies API connectivity by retrieving organization data.
         If org_id is configured, it fetches that specific organization. Otherwise,
         it uses the /self endpoint to discover the first available organization.
-        
+
         Returns:
             dict: Connection result with the following structure:
                 - success (bool): True if connection succeeded
                 - org_name (str): Name of the organization (on success)
                 - org_id (str): Organization ID (on success)
                 - error (str): Error message (on failure)
-        
+
         Side Effects:
             Sets self.org_id if auto-detected from API token privileges
-        
+
         Example:
             result = mist.test_connection()
             if result["success"]:
@@ -178,7 +205,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # If org_id is configured, verify we can access it
             if self.org_id:
                 response = mistapi.api.v1.orgs.orgs.getOrg(session, self.org_id)
@@ -196,7 +223,7 @@ class MistConnection:
                 response = mistapi.api.v1.self.self.getSelf(session)
                 self_data = response.data if hasattr(response, "data") else response
                 privileges = self_data.get("privileges", []) if isinstance(self_data, dict) else []
-                
+
                 if privileges:
                     # Use the first organization the token has access to
                     first_org = privileges[0]
@@ -208,22 +235,22 @@ class MistConnection:
                     }
                 else:
                     return {"success": False, "error": "No organizations found for this API token"}
-                    
+
         except Exception as error:
             logger.error(f"Connection test failed: {error}")
             return {"success": False, "error": str(error)}
-    
+
     # =========================================================================
     # SITE DATA METHODS
     # =========================================================================
-    
+
     def get_sites(self) -> List[Dict[str, Any]]:
         """
         Get all sites in the organization.
-        
+
         Retrieves a list of all sites associated with the configured organization.
         Sites are sorted alphabetically by name for consistent display in the UI.
-        
+
         Returns:
             list: List of site dictionaries with the following fields:
                 - id (str): Site UUID
@@ -231,38 +258,38 @@ class MistConnection:
                 - address (str): Site address
                 - country_code (str): Two-letter country code
                 - timezone (str): Site timezone
-        
+
         Raises:
             ValueError: If organization ID cannot be determined
             Exception: For API errors
-        
+
         Note:
             If org_id is not set, this method will attempt to auto-detect it
             by calling test_connection() first.
         """
         try:
             session = self._get_session()
-            
+
             # Ensure we have an org_id before proceeding
             if not self.org_id:
                 test_result = self.test_connection()
                 if not test_result["success"]:
                     raise ValueError("Could not determine organization ID")
-            
+
             # org_id is guaranteed to be set after test_connection succeeds
             org_id: str = self.org_id or ""
-            
+
             # Fetch all sites with pagination handled by mistapi.get_all()
             response = mistapi.api.v1.orgs.sites.listOrgSites(
-                session, 
-                org_id, 
+                session,
+                org_id,
                 limit=1000  # Maximum items per page
             )
             sites = mistapi.get_all(response=response, mist_session=session) or []
-            
+
             # Sort sites alphabetically by name for consistent UI display
             sites.sort(key=lambda site: site.get("name", "").lower())
-            
+
             # Return simplified site list with only needed fields for dropdown
             return [
                 {
@@ -274,18 +301,18 @@ class MistConnection:
                 }
                 for site in sites
             ]
-            
+
         except Exception as error:
             logger.error(f"Error fetching sites: {error}")
             raise
-    
+
     def get_site_info(self, site_id: str) -> Dict[str, Any]:
         """
         Get basic information for a single site.
-        
+
         Args:
             site_id: UUID of the site to query
-        
+
         Returns:
             dict: Site information including name, address, timezone
         """
@@ -306,26 +333,26 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching site info: {error}")
             raise
-    
+
     # =========================================================================
     # DEVICE HEALTH METHODS
     # =========================================================================
-    
+
     def get_site_health(self, site_id: str) -> Dict[str, Any]:
         """
         Get device health statistics for a site.
-        
+
         Retrieves device statistics for all device types (APs, switches, gateways)
         and calculates health metrics including connected/disconnected counts
         and overall health percentage.
-        
+
         This method also resolves SSID names for APs by building a mapping from
         device profiles to WLANs via templates. This allows displaying which
         SSIDs each AP is broadcasting.
-        
+
         Args:
             site_id: UUID of the site to query
-        
+
         Returns:
             dict: Health data with the following structure:
                 {
@@ -344,7 +371,7 @@ class MistConnection:
                         "health_percentage": float
                     }
                 }
-        
+
         Note:
             Device summaries include type-specific fields:
             - APs: num_clients, ssids, power_src, port_speed
@@ -354,7 +381,7 @@ class MistConnection:
         try:
             session = self._get_session()
             org_id: str = self.org_id or ""
-            
+
             # -----------------------------------------------------------------
             # Build device profile -> SSIDs mapping for AP SSID resolution
             # Chain: AP.deviceprofile_id -> Template.deviceprofile_ids -> WLAN.template_id
@@ -362,12 +389,13 @@ class MistConnection:
             deviceprofile_ssids: Dict[str, List[str]] = {}
             try:
                 # Fetch org templates to build template -> device profile mapping
-                templates_response = mistapi.api.v1.orgs.templates.listOrgTemplates(
-                    session, org_id
-                )
-                templates_data = templates_response.data if hasattr(templates_response, "data") else templates_response
-                templates = templates_data if isinstance(templates_data, list) else []
-                
+                with stage("template_fetch", module=__name__, function="get_site_health", site_id=site_id):
+                    templates_response = mistapi.api.v1.orgs.templates.listOrgTemplates(
+                        session, org_id
+                    )
+                    templates_data = templates_response.data if hasattr(templates_response, "data") else templates_response
+                    templates = templates_data if isinstance(templates_data, list) else []
+
                 # Build template_id -> deviceprofile_ids mapping
                 # Templates define which device profiles should receive which configs
                 template_to_deviceprofiles: Dict[str, List[str]] = {}
@@ -379,51 +407,53 @@ class MistConnection:
                         # Only include if template is filtered by device profile
                         if template_id and dp_ids and filter_by_dp:
                             template_to_deviceprofiles[template_id] = dp_ids
-                
+
                 # Fetch org WLANs to map SSIDs to device profiles
-                wlans_response = mistapi.api.v1.orgs.wlans.listOrgWlans(
-                    session, org_id
-                )
-                wlans_data = wlans_response.data if hasattr(wlans_response, "data") else wlans_response
-                org_wlans = wlans_data if isinstance(wlans_data, list) else []
-                
-                # Build deviceprofile_id -> SSIDs mapping
-                for wlan in org_wlans:
-                    if not isinstance(wlan, dict):
-                        continue
-                    # Skip disabled WLANs
-                    if not wlan.get("enabled", True):
-                        continue
-                    ssid = wlan.get("ssid", "")
-                    template_id = wlan.get("template_id", "")
-                    if not ssid:
-                        continue
-                    
-                    # If WLAN has a template_id, map it to device profiles via template
-                    if template_id and template_id in template_to_deviceprofiles:
-                        for dp_id in template_to_deviceprofiles[template_id]:
-                            if dp_id not in deviceprofile_ssids:
-                                deviceprofile_ssids[dp_id] = []
-                            # Avoid duplicate SSIDs in the list
-                            if ssid not in deviceprofile_ssids[dp_id]:
-                                deviceprofile_ssids[dp_id].append(ssid)
-                
-                logger.debug(f"Built SSID mapping for {len(deviceprofile_ssids)} device profiles")
+                with stage("wlan_mapping", module=__name__, function="get_site_health", site_id=site_id):
+                    wlans_response = mistapi.api.v1.orgs.wlans.listOrgWlans(
+                        session, org_id
+                    )
+                    wlans_data = wlans_response.data if hasattr(wlans_response, "data") else wlans_response
+                    org_wlans = wlans_data if isinstance(wlans_data, list) else []
+
+                    # Build deviceprofile_id -> SSIDs mapping
+                    for wlan in org_wlans:
+                        if not isinstance(wlan, dict):
+                            continue
+                        # Skip disabled WLANs
+                        if not wlan.get("enabled", True):
+                            continue
+                        ssid = wlan.get("ssid", "")
+                        template_id = wlan.get("template_id", "")
+                        if not ssid:
+                            continue
+
+                        # If WLAN has a template_id, map it to device profiles via template
+                        if template_id and template_id in template_to_deviceprofiles:
+                            for dp_id in template_to_deviceprofiles[template_id]:
+                                if dp_id not in deviceprofile_ssids:
+                                    deviceprofile_ssids[dp_id] = []
+                                # Avoid duplicate SSIDs in the list
+                                if ssid not in deviceprofile_ssids[dp_id]:
+                                    deviceprofile_ssids[dp_id].append(ssid)
+
+                    logger.debug(f"Built SSID mapping for {len(deviceprofile_ssids)} device profiles")
             except Exception as mapping_error:
                 # Non-fatal: continue without SSID mapping if it fails
                 logger.warning(f"Could not build device profile SSID mapping: {mapping_error}")
-            
+
             # -----------------------------------------------------------------
             # Fetch device stats for all device types
             # -----------------------------------------------------------------
-            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                session, 
-                site_id, 
-                type="all",  # Fetch APs, switches, and gateways
-                limit=1000
-            )
-            devices = mistapi.get_all(response=response, mist_session=session) or []
-            
+            with stage("device_stats_fetch", module=__name__, function="get_site_health", site_id=site_id):
+                response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                    session,
+                    site_id,
+                    type="all",  # Fetch APs, switches, and gateways
+                    limit=1000
+                )
+                devices = mistapi.get_all(response=response, mist_session=session) or []
+
             # -----------------------------------------------------------------
             # Initialize health data structure
             # -----------------------------------------------------------------
@@ -433,15 +463,16 @@ class MistConnection:
                 "gateways": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
                 "summary": {"total": 0, "connected": 0, "disconnected": 0, "health_percentage": 0}
             }
-            
+
             # -----------------------------------------------------------------
             # Process each device and categorize by type
             # -----------------------------------------------------------------
+            categorize_start = time.perf_counter()
             for device in devices:
                 device_type = device.get("type", "unknown")
                 status = device.get("status", "unknown")
                 is_connected = status == "connected"
-                
+
                 # Build base device summary with common fields
                 device_summary = {
                     "id": device.get("id"),
@@ -456,7 +487,7 @@ class MistConnection:
                     "serial": device.get("serial", ""),
                     "notes": device.get("notes", "")
                 }
-                
+
                 # Categorize by device type and add type-specific fields
                 if device_type == "ap":
                     # ---------------------------------------------------------
@@ -465,23 +496,23 @@ class MistConnection:
                     device_summary["num_clients"] = device.get("num_clients", 0) or 0
                     device_summary["power_src"] = device.get("power_src", "")
                     device_summary["power_opmode"] = device.get("power_opmode", "")
-                    
+
                     # Get port speed from port_stat (eth0 is the uplink port)
                     port_stat = device.get("port_stat", {})
                     eth0_stat = port_stat.get("eth0", {})
                     device_summary["port_speed"] = eth0_stat.get("speed", 0)
-                    
+
                     # Resolve SSIDs for this AP based on its device profile
                     # Uses the deviceprofile_id -> SSIDs mapping built from templates
                     ap_deviceprofile_id = device.get("deviceprofile_id", "")
                     ap_ssids: List[str] = deviceprofile_ssids.get(ap_deviceprofile_id, [])
                     device_summary["ssids"] = ap_ssids.copy() if ap_ssids else []
-                    
+
                     # Update AP counters
                     health_data["aps"]["total"] += 1
                     health_data["aps"]["connected" if is_connected else "disconnected"] += 1
                     health_data["aps"]["devices"].append(device_summary)
-                    
+
                 elif device_type == "switch":
                     # ---------------------------------------------------------
                     # Switch-specific fields
@@ -490,16 +521,16 @@ class MistConnection:
                     clients_stats = device.get("clients_stats", {}).get("total", {})
                     device_summary["num_wired_clients"] = clients_stats.get("num_wired_clients", 0) or 0
                     device_summary["num_wifi_clients"] = clients_stats.get("num_wifi_clients", 0) or 0
-                    
+
                     # num_aps comes as a list, get the first value
                     num_aps = clients_stats.get("num_aps", [0])
                     device_summary["num_aps"] = num_aps[0] if isinstance(num_aps, list) and num_aps else 0
-                    
+
                     # Update switch counters
                     health_data["switches"]["total"] += 1
                     health_data["switches"]["connected" if is_connected else "disconnected"] += 1
                     health_data["switches"]["devices"].append(device_summary)
-                    
+
                 elif device_type == "gateway":
                     # ---------------------------------------------------------
                     # Gateway-specific fields (basic info only, WAN details separate)
@@ -507,44 +538,53 @@ class MistConnection:
                     health_data["gateways"]["total"] += 1
                     health_data["gateways"]["connected" if is_connected else "disconnected"] += 1
                     health_data["gateways"]["devices"].append(device_summary)
-                
+
                 # Update overall summary counters
                 health_data["summary"]["total"] += 1
                 health_data["summary"]["connected" if is_connected else "disconnected"] += 1
-            
+            emit_perf_event(
+                event_name="mist_api_stage",
+                module=__name__,
+                function="get_site_health.device_categorization",
+                site_id=site_id,
+                duration_ms=duration_ms_since(categorize_start),
+                items_returned=len(devices),
+            )
+
             # -----------------------------------------------------------------
             # Calculate overall health percentage
             # -----------------------------------------------------------------
-            if health_data["summary"]["total"] > 0:
-                health_data["summary"]["health_percentage"] = round(
-                    (health_data["summary"]["connected"] / health_data["summary"]["total"]) * 100, 1
-                )
-            
+            with stage("summary_build", module=__name__, function="get_site_health", site_id=site_id):
+                if health_data["summary"]["total"] > 0:
+                    health_data["summary"]["health_percentage"] = round(
+                        (health_data["summary"]["connected"] / health_data["summary"]["total"]) * 100, 1
+                    )
+
             return health_data
-            
+
         except Exception as error:
             logger.error(f"Error fetching site health for {site_id}: {error}")
             raise
-    
+
     # =========================================================================
     # SLE (SERVICE LEVEL EXPERIENCE) METHODS
     # =========================================================================
-    
+
     def get_site_sle(self, site_id: str, duration: str = "1d") -> Dict[str, Any]:
         """
         Get SLE (Service Level Experience) metrics for a site with subcategories.
-        
+
         SLE metrics provide insight into the quality of service experienced by
         users. This method fetches summary scores for all enabled metrics and
         categorizes them into WiFi, Wired, and WAN categories.
-        
+
         The SLE value is calculated as: ((total - degraded) / total) * 100
-        
+
         Args:
             site_id: The site ID to get SLE metrics for
             duration: Time range for metrics calculation
                       Valid values: '10m', '1h', 'today', '1d', '1w' (default: '1d')
-        
+
         Returns:
             dict: SLE data with the following structure:
                 {
@@ -555,7 +595,7 @@ class MistConnection:
                     "wired": {"metrics": {...}, "available": True/False},
                     "wan": {"metrics": {...}, "available": True/False}
                 }
-        
+
         Note:
             - For '10m' duration, explicit start/end timestamps are used
             - Metrics are only included if they have data (total_sum > 0)
@@ -563,18 +603,18 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # -----------------------------------------------------------------
             # Calculate time range parameters
             # -----------------------------------------------------------------
             # The API supports duration values like '1h', '1d', '1w' but for 10 minutes
             # we need to use explicit start/end epoch timestamps
             use_timestamps = duration == '10m'
-            
+
             start_time: int = 0
             end_time: int = 0
             api_duration: str = '1d'
-            
+
             if use_timestamps:
                 # Calculate start/end epoch timestamps for 10 minutes
                 end_time = int(time.time())
@@ -588,7 +628,7 @@ class MistConnection:
                     '1w': '1w'
                 }
                 api_duration = duration_map.get(duration, '1d')
-            
+
             # -----------------------------------------------------------------
             # Initialize SLE data structure
             # -----------------------------------------------------------------
@@ -597,7 +637,7 @@ class MistConnection:
                 "wired": {"metrics": {}, "available": False},
                 "wan": {"metrics": {}, "available": False}
             }
-            
+
             # Define which metrics belong to which category
             # These are the standard SLE metric names from the Mist API
             metric_categories = {
@@ -605,7 +645,7 @@ class MistConnection:
                 "wired": ["switch-health-v2", "switch-throughput", "switch-stc"],
                 "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
             }
-            
+
             # -----------------------------------------------------------------
             # Get list of enabled metrics for the site
             # -----------------------------------------------------------------
@@ -621,7 +661,7 @@ class MistConnection:
             except Exception as e:
                 logger.debug(f"Could not get enabled metrics for site {site_id}: {e}")
                 enabled_metrics = []
-            
+
             # -----------------------------------------------------------------
             # Fetch summary for each enabled metric and categorize
             # -----------------------------------------------------------------
@@ -632,11 +672,11 @@ class MistConnection:
                     if metric in cat_metrics or any(metric.startswith(m) for m in cat_metrics):
                         category = cat
                         break
-                
+
                 # Skip metrics that don't belong to any category
                 if not category:
                     continue
-                    
+
                 try:
                     # ---------------------------------------------------------
                     # Fetch SLE summary for this metric
@@ -666,7 +706,7 @@ class MistConnection:
                             duration=api_duration
                         )
                     summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
-                    
+
                     # ---------------------------------------------------------
                     # Calculate SLE percentage from sample data
                     # ---------------------------------------------------------
@@ -677,49 +717,49 @@ class MistConnection:
                         samples = sle_info.get("samples", {})
                         total_samples = samples.get("total", [])
                         degraded_samples = samples.get("degraded", [])
-                        
+
                         # Sum up totals and degraded values (filter out None values)
                         total_sum = sum([x for x in total_samples if x is not None])
                         degraded_sum = sum([x for x in degraded_samples if x is not None])
-                        
+
                         # Only record metrics with actual data
                         if total_sum > 0:
                             sle_value = ((total_sum - degraded_sum) / total_sum) * 100
                             sle_data[category]["available"] = True
-                            
+
                             # Clean up metric name for display (remove version suffixes)
                             display_name = metric.replace("-v2", "").replace("-v4", "").replace("-new", "")
-                            
+
                             # Avoid duplicates (e.g., switch-health and switch-health-v2)
                             if display_name not in sle_data[category]["metrics"]:
                                 sle_data[category]["metrics"][display_name] = round(sle_value, 1)
-                            
+
                 except Exception as metric_error:
                     logger.debug(f"Could not fetch {metric} for site {site_id}: {metric_error}")
-            
-            
+
+
             return sle_data
-            
+
         except Exception as error:
             logger.error(f"Error fetching site SLE for {site_id}: {error}")
             raise
-    
+
     def get_sle_classifiers(
         self, site_id: str, metric: str, scope: str = "site"
     ) -> List[Dict[str, Any]]:
         """
         Get list of classifiers for a specific SLE metric.
-        
+
         Classifiers break down an SLE metric into its contributing factors.
         For example, the 'coverage' metric might have classifiers like
         'weak-signal', 'interference', 'ap-disconnected', etc.
-        
+
         Args:
             site_id: The site ID
             metric: The SLE metric name (e.g., 'coverage', 'capacity', 'time-to-connect')
             scope: The scope type - determines what level of detail is returned
                    Values: 'site', 'ap', 'switch', 'gateway', 'client'
-        
+
         Returns:
             List of classifier dictionaries with structure:
             [
@@ -730,7 +770,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Fetch classifier list from the Mist SLE API
             response = mistapi.api.v1.sites.sle.listSiteSleMetricClassifiers(
                 session,
@@ -740,17 +780,17 @@ class MistConnection:
                 metric=metric
             )
             data = response.data if hasattr(response, "data") else response
-            
+
             # Extract classifiers array from response
             if isinstance(data, dict):
                 classifiers = data.get("classifiers", [])
                 return classifiers if isinstance(classifiers, list) else []
             return []
-            
+
         except Exception as error:
             logger.error(f"Error fetching SLE classifiers for {metric}: {error}")
             return []
-    
+
     def get_sle_classifier_details(
         self,
         site_id: str,
@@ -761,11 +801,11 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get detailed breakdown for a specific SLE classifier.
-        
+
         Provides granular data about a specific factor affecting SLE scores.
         This is used for drill-down views when users click on a classifier
         in the SLE detail pages.
-        
+
         Args:
             site_id: The site ID
             metric: The SLE metric name (e.g., 'coverage', 'capacity')
@@ -774,7 +814,7 @@ class MistConnection:
                       Values: '1h', '1d', '1w' (default: '1d')
             scope: The scope type for the query
                    Values: 'site', 'ap', 'switch', 'gateway', 'client'
-        
+
         Returns:
             dict: Classifier details including:
                 - samples: Time-series data for the classifier
@@ -783,7 +823,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Fetch detailed classifier breakdown from the Mist API
             response = mistapi.api.v1.sites.sle.getSiteSleClassifierDetails(
                 session,
@@ -795,13 +835,13 @@ class MistConnection:
                 duration=duration
             )
             data = response.data if hasattr(response, "data") else response
-            
+
             return data if isinstance(data, dict) else {}
-            
+
         except Exception as error:
             logger.error(f"Error fetching classifier details for {metric}/{classifier}: {error}")
             return {}
-    
+
     def get_sle_impact_summary(
         self,
         site_id: str,
@@ -812,10 +852,10 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get impact summary showing affected clients/devices for an SLE metric.
-        
+
         Impact summaries help quantify how many users or devices are affected
         by SLE degradation. Used to prioritize which issues to address first.
-        
+
         Args:
             site_id: The site ID
             metric: The SLE metric name (e.g., 'coverage', 'throughput')
@@ -825,7 +865,7 @@ class MistConnection:
                         If None, returns overall metric impact
             scope: The scope type for the query
                    Values: 'site', 'ap', 'switch', 'gateway', 'client'
-        
+
         Returns:
             dict: Impact summary data including:
                 - total_clients: Number of clients affected
@@ -835,7 +875,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Build dynamic kwargs to handle optional classifier parameter
             kwargs: Dict[str, Any] = {
                 "mist_session": session,
@@ -847,17 +887,17 @@ class MistConnection:
             }
             if classifier:
                 kwargs["classifier"] = classifier
-            
+
             # Fetch impact summary from the Mist API
             response = mistapi.api.v1.sites.sle.getSiteSleImpactSummary(**kwargs)
             data = response.data if hasattr(response, "data") else response
-            
+
             return data if isinstance(data, dict) else {}
-            
+
         except Exception as error:
             logger.error(f"Error fetching SLE impact summary for {metric}: {error}")
             return {}
-    
+
     def get_sle_impacted_items(
         self,
         site_id: str,
@@ -868,11 +908,11 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get detailed impacted items (Distribution/Affected Items) for an SLE metric.
-        
+
         Retrieves rich distribution data showing which gateways, interfaces,
         applications, or clients are affected by SLE degradation. This matches
         the data shown in Mist dashboard's Distribution and Affected Items tabs.
-        
+
         Args:
             site_id: The site ID
             metric: SLE metric name (e.g., 'wan-link-health', 'gateway-health')
@@ -884,7 +924,7 @@ class MistConnection:
                 - 'wireless_clients': Wireless clients affected
             duration: Time range ('1d', '7d', '2w')
             classifier: Optional classifier filter (e.g., 'network-latency')
-        
+
         Returns:
             dict: Contains metadata and items list with failure rates:
             {
@@ -896,14 +936,14 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Determine scope based on metric type
             # WAN metrics (gateway-*) use 'site' scope with site_id
             # Switch metrics (switch-*) would use 'switch' scope
             # WiFi metrics use 'site' scope
             scope = "site"
             scope_id = site_id
-            
+
             # Build kwargs for API call
             base_kwargs: Dict[str, Any] = {
                 "mist_session": session,
@@ -915,7 +955,7 @@ class MistConnection:
             }
             if classifier:
                 base_kwargs["classifier"] = classifier
-            
+
             # Map item_type to appropriate API function and response key
             api_map = {
                 "gateways": (mistapi.api.v1.sites.sle.listSiteSleImpactedGateways, "gateways"),
@@ -924,73 +964,73 @@ class MistConnection:
                 "clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWiredClients, "clients"),
                 "wireless_clients": (mistapi.api.v1.sites.sle.listSiteSleImpactedWirelessClients, "users"),
             }
-            
+
             if item_type not in api_map:
                 return {"total_count": 0, "items": [], "error": f"Invalid item_type: {item_type}"}
-            
+
             api_func, response_key = api_map[item_type]
             response = api_func(**base_kwargs)
             data = response.data if hasattr(response, "data") else response
-            
+
             if not isinstance(data, dict):
                 return {"total_count": 0, "items": []}
-            
+
             raw_items = data.get(response_key, [])
             total_count = data.get("total_count", len(raw_items))
-            
+
             # Debug: Log raw item fields to understand API response format
             if raw_items:
                 logger.info(f"WAN Impact Debug [{item_type}]: First raw item keys: {list(raw_items[0].keys())}")
                 logger.info(f"WAN Impact Debug [{item_type}]: First raw item: {raw_items[0]}")
-            
+
             # Calculate failure rate and overall impact for each item
             total_degraded_all = sum(item.get("degraded", 0) for item in raw_items)
-            
+
             items = []
             for item in raw_items:
                 degraded = item.get("degraded", 0)
                 total = item.get("total", 0)
                 failure_rate = round((degraded / total) * 100, 1) if total > 0 else 0
                 overall_impact = round((degraded / total_degraded_all) * 100, 1) if total_degraded_all > 0 else 0
-                
+
                 processed_item = {
                     **item,
                     "failure_rate": failure_rate,
                     "overall_impact": overall_impact
                 }
                 items.append(processed_item)
-            
+
             # Sort by overall_impact descending (most impactful first)
             items.sort(key=lambda x: x.get("overall_impact", 0), reverse=True)
-            
+
             return {
                 "total_count": total_count,
                 "metric": metric,
                 "classifier": classifier or "",
                 "items": items
             }
-            
+
         except Exception as error:
             logger.error(f"Error fetching impacted {item_type} for {metric}: {error}")
             return {"total_count": 0, "items": [], "error": str(error)}
-    
+
     def get_sle_details(self, site_id: str, category: str, duration: str = "1d") -> Dict[str, Any]:
         """
         Get comprehensive SLE details for a category (wifi, wired, or wan).
-        
+
         This method aggregates multiple API calls to build a complete picture
         of SLE health for a given category. Used by the detail pages to show:
         - All metrics in the category with their current scores
         - Classifiers contributing to each metric's degradation
         - Impact data showing affected clients/devices
-        
+
         Args:
             site_id: The site ID
             category: SLE category to fetch
                       Values: 'wifi', 'wired', 'wan'
             duration: Time range for data aggregation
                       Values: '1h', '1d', '1w' (default: '1d')
-        
+
         Returns:
             dict: Comprehensive SLE data:
             {
@@ -1009,7 +1049,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # -----------------------------------------------------------------
             # Define metric-to-category mapping
             # -----------------------------------------------------------------
@@ -1018,10 +1058,10 @@ class MistConnection:
                 "wired": ["switch-health-v2", "switch-throughput", "switch-stc"],
                 "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
             }
-            
+
             if category not in metric_categories:
                 raise ValueError(f"Invalid category: {category}")
-            
+
             # -----------------------------------------------------------------
             # Get list of enabled metrics for the site
             # -----------------------------------------------------------------
@@ -1037,7 +1077,7 @@ class MistConnection:
             except Exception as e:
                 logger.debug(f"Could not get enabled metrics: {e}")
                 enabled_metrics = []
-            
+
             # -----------------------------------------------------------------
             # Filter to only metrics in this category that are enabled
             # -----------------------------------------------------------------
@@ -1047,13 +1087,13 @@ class MistConnection:
                     em.startswith(m) for em in enabled_metrics
                 )
             ]
-            
+
             result: Dict[str, Any] = {
                 "category": category,
                 "duration": duration,
                 "metrics": {}
             }
-            
+
             for metric in category_metrics:
                 # Find actual metric name (might have version suffix like -v2)
                 actual_metric = metric
@@ -1061,14 +1101,14 @@ class MistConnection:
                     if em.startswith(metric):
                         actual_metric = em
                         break
-                
+
                 metric_data: Dict[str, Any] = {
                     "name": metric,
                     "sle_value": None,
                     "classifiers": [],
                     "impact": {}
                 }
-                
+
                 # Get SLE summary trend - this includes classifiers with full data
                 # Using getSiteSleSummaryTrend instead of deprecated getSiteSleSummary
                 try:
@@ -1081,7 +1121,7 @@ class MistConnection:
                         duration=duration
                     )
                     summary_data = summary_response.data if hasattr(summary_response, "data") else summary_response
-                    
+
                     # Also get the deprecated summary to extract impact data per classifier
                     # The trend API doesn't include per-classifier impact, only the deprecated one does
                     classifier_impact_map: Dict[str, Dict[str, Any]] = {}
@@ -1101,7 +1141,7 @@ class MistConnection:
                                     classifier_impact_map[clf["name"]] = clf["impact"]
                     except Exception as e:
                         logger.debug(f"Could not get impact data from deprecated API for {actual_metric}: {e}")
-                    
+
                     if isinstance(summary_data, dict):
                         # Extract overall SLE value
                         if "sle" in summary_data:
@@ -1109,16 +1149,16 @@ class MistConnection:
                             samples = sle_info.get("samples", {})
                             total = sum(x for x in samples.get("total", []) if x is not None)
                             degraded = sum(x for x in samples.get("degraded", []) if x is not None)
-                            
+
                             if total > 0:
                                 metric_data["sle_value"] = round(((total - degraded) / total) * 100, 1)
-                        
+
                         # Extract overall impact
                         metric_data["impact"] = summary_data.get("impact", {})
-                        
+
                         # Extract classifiers from summary (already contains full data)
                         raw_classifiers = summary_data.get("classifiers", [])
-                        
+
                         # Calculate total degraded across all classifiers for percentage calc
                         total_classifier_degraded = 0
                         for clf in raw_classifiers:
@@ -1126,7 +1166,7 @@ class MistConnection:
                                 clf_samples = clf.get("samples", {})
                                 clf_degraded = clf_samples.get("degraded", [])
                                 total_classifier_degraded += sum(x for x in clf_degraded if x is not None)
-                        
+
                         # Process each classifier
                         for clf in raw_classifiers:
                             if isinstance(clf, dict):
@@ -1134,16 +1174,16 @@ class MistConnection:
                                 clf_samples = clf.get("samples", {})
                                 # Get impact from the deprecated API's classifier data
                                 clf_impact = classifier_impact_map.get(clf_name, {})
-                                
+
                                 # Calculate degraded sum for this classifier
                                 degraded_values = clf_samples.get("degraded", [])
                                 clf_degraded_sum = sum(x for x in degraded_values if x is not None)
-                                
+
                                 # Calculate percentage of total degradation
                                 percentage = 0
                                 if total_classifier_degraded > 0:
                                     percentage = round((clf_degraded_sum / total_classifier_degraded) * 100, 1)
-                                
+
                                 # Build impact dict with all available fields
                                 # WiFi uses: num_aps, total_aps, num_users, total_users
                                 # WAN uses: num_gateways, total_gateways, num_users, total_users
@@ -1164,21 +1204,21 @@ class MistConnection:
                                     },
                                     "samples": clf_samples
                                 }
-                                
+
                                 # Only include classifiers with actual degradation
                                 if clf_degraded_sum > 0:
                                     metric_data["classifiers"].append(classifier_info)
-                        
+
                         # Sort classifiers by percentage (highest first)
                         metric_data["classifiers"].sort(key=lambda x: x.get("percentage", 0), reverse=True)
-                        
+
                 except Exception as e:
                     logger.debug(f"Could not get summary for {actual_metric}: {e}")
-                
+
                 result["metrics"][metric] = metric_data
-            
+
             return result
-            
+
         except Exception as error:
             logger.error(f"Error fetching SLE details for {category}: {error}")
             raise
@@ -1188,18 +1228,18 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get detailed impact information for a specific classifier.
-        
+
         Provides granular breakdown of which network elements are affected by
         a specific SLE degradation factor. This data is used for root cause
         analysis and remediation planning.
-        
+
         Args:
             site_id: The site ID
             metric: The SLE metric name (e.g., 'coverage', 'capacity')
             classifier: The classifier name (e.g., 'weak-signal', 'interference')
             duration: Time range for impact data
                       Values: '1h', '1d', '1w' (default: '1d')
-        
+
         Returns:
             dict: Detailed impact breakdown:
             {
@@ -1211,18 +1251,18 @@ class MistConnection:
                 "device_os": [{"os": "Windows", "degraded": 60, ...}, ...],
                 "bands": [{"band": "2.4 GHz", "degraded": 80, ...}, ...]
             }
-            
+
         Note:
             All lists are sorted by 'degraded' count (highest first) for
             easy identification of the most impacted elements.
         """
         try:
             session = self._get_session()
-            
+
             # For wired metrics, we need to request switch,chassis fields
             # For WiFi metrics, we need ap,wlan,device_type,device_os,band fields
             is_wired_metric = metric.startswith("switch-")
-            
+
             # Fetch impact summary from the Mist API
             if is_wired_metric:
                 # Wired metrics need fields=switch,chassis
@@ -1247,16 +1287,16 @@ class MistConnection:
                     classifier=classifier,
                     duration=duration
                 )
-            
+
             data = response.data if hasattr(response, "data") else response
-            
+
             # Log raw data for debugging
             logger.debug(f"Impact summary raw data keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
-            
+
             # Return empty structure if no valid data
             if not isinstance(data, dict):
                 return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": [], "switches": [], "chassis": []}
-            
+
             # -----------------------------------------------------------------
             # Process APs - extract only those with actual degradation
             # -----------------------------------------------------------------
@@ -1270,7 +1310,7 @@ class MistConnection:
                         "total": ap.get("total", 0)
                     })
             aps.sort(key=lambda x: x["degraded"], reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process WLANs - extract only those with actual degradation
             # -----------------------------------------------------------------
@@ -1284,7 +1324,7 @@ class MistConnection:
                         "total": wlan.get("total", 0)
                     })
             wlans.sort(key=lambda x: x["degraded"], reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process device types (laptop, phone, tablet, etc.)
             # -----------------------------------------------------------------
@@ -1298,7 +1338,7 @@ class MistConnection:
                         "total": dt.get("total", 0)
                     })
             device_types.sort(key=lambda x: x["degraded"], reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process device operating systems
             # -----------------------------------------------------------------
@@ -1312,7 +1352,7 @@ class MistConnection:
                         "total": dos.get("total", 0)
                     })
             device_os.sort(key=lambda x: x["degraded"], reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process WiFi bands with human-readable names
             # -----------------------------------------------------------------
@@ -1333,10 +1373,10 @@ class MistConnection:
                         "total": band.get("total", 0)
                     })
             bands.sort(key=lambda x: x["degraded"], reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process Switches (for wired SLEs)
-            # Response format: {"switch_mac": "...", "name": "...", "degraded": 1.95, 
+            # Response format: {"switch_mac": "...", "name": "...", "degraded": 1.95,
             #                   "total": 1251.53, "duration": 1251.53, "switch_model": "...", "switch_version": "..."}
             # -----------------------------------------------------------------
             switches = []
@@ -1353,7 +1393,7 @@ class MistConnection:
                         "chassis_mac": sw.get("chassis_mac", "")
                     })
             switches.sort(key=lambda x: x.get("degraded", 0), reverse=True)
-            
+
             # -----------------------------------------------------------------
             # Process Chassis (for wired SLEs with virtual chassis)
             # Response format: {"chassis": "0", "switch_mac": "...", "switch_name": "...",
@@ -1373,7 +1413,7 @@ class MistConnection:
                         "chassis_mac": ch.get("chassis_mac", "")
                     })
             chassis.sort(key=lambda x: x.get("degraded", 0), reverse=True)
-            
+
             # Log raw data keys for debugging wired SLEs
             if metric.startswith("switch-"):
                 logger.info(f"Wired impact data keys: {list(data.keys())}")
@@ -1381,7 +1421,7 @@ class MistConnection:
                     logger.info(f"Found {len(data['switch'])} switches in impact data")
                 if "chassis" in data and data["chassis"]:
                     logger.info(f"Found {len(data['chassis'])} chassis in impact data")
-            
+
             return {
                 "metric": metric,
                 "classifier": classifier,
@@ -1393,27 +1433,27 @@ class MistConnection:
                 "switches": switches,
                 "chassis": chassis
             }
-            
+
         except Exception as error:
             logger.error(f"Error fetching classifier impact details: {error}")
             return {"aps": [], "wlans": [], "device_types": [], "device_os": [], "bands": [], "switches": [], "chassis": []}
-    
+
     # =========================================================================
     # DEVICE AND CLIENT METHODS
     # =========================================================================
-    
+
     def get_site_devices(self, site_id: str, device_type: str = "all") -> List[Dict[str, Any]]:
         """
         Get detailed device information for a site.
-        
+
         Fetches device statistics including status, model, version, and
         client counts for all network devices at a site.
-        
+
         Args:
             site_id: The site ID
             device_type: Filter by device type
                          Values: 'all', 'ap', 'switch', 'gateway' (default: 'all')
-        
+
         Returns:
             list: Device dictionaries with fields:
                 - id, name, mac, model, serial, status
@@ -1423,17 +1463,17 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Fetch device stats with optional type filter
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                session, 
-                site_id, 
-                type=device_type, 
+                session,
+                site_id,
+                type=device_type,
                 limit=1000
             )
             # Use pagination to get all devices if more than 1000
             devices = mistapi.get_all(response=response, mist_session=session) or []
-            
+
             return [
                 {
                     "id": device.get("id"),
@@ -1452,7 +1492,7 @@ class MistConnection:
                 }
                 for device in devices
             ]
-            
+
         except Exception as error:
             logger.error(f"Error fetching devices for site {site_id}: {error}")
             raise
@@ -1460,23 +1500,23 @@ class MistConnection:
     def get_wireless_client_sessions(self, site_id: str) -> List[Dict[str, Any]]:
         """
         Get wireless client data combining sessions, client stats, and client search.
-        
+
         This provides the most complete view of wireless clients by merging data
         from three different Mist API endpoints:
-        
+
         1. listSiteWirelessClientsStats - Current connected clients with real-time
            statistics (RSSI, uptime, etc.)
         2. searchSiteWirelessClients - Client search with hostname, username, OS
            and other identification data
         3. searchSiteWirelessClientSessions - Historical session data including
            connect/disconnect times and duration
-        
+
         The method deduplicates clients by MAC address and merges fields from
         all sources to provide the most complete client profile possible.
-        
+
         Args:
             site_id: The site ID to get wireless clients for
-        
+
         Returns:
             list: Client dictionaries with merged data:
                 - mac: Client MAC address (unique identifier)
@@ -1496,17 +1536,17 @@ class MistConnection:
         try:
             session = self._get_session()
             clients_by_mac = {}
-            
+
             # -----------------------------------------------------------------
             # Source 1: Real-time connected clients with detailed stats
             # -----------------------------------------------------------------
             try:
                 stats_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    session, 
+                    session,
                     site_id
                 )
                 stats_results = mistapi.get_all(response=stats_response, mist_session=session) or []
-                
+
                 for client in stats_results:
                     mac = client.get("mac", "")
                     if mac:
@@ -1528,18 +1568,18 @@ class MistConnection:
                         }
             except Exception as e:
                 logger.debug(f"Could not fetch wireless client stats: {e}")
-            
+
             # -----------------------------------------------------------------
             # Source 2: Client search data (hostname, username, OS, etc.)
             # -----------------------------------------------------------------
             try:
                 search_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
-                    session, 
+                    session,
                     site_id,
                     limit=1000
                 )
                 search_results = mistapi.get_all(response=search_response, mist_session=session) or []
-                
+
                 for client in search_results:
                     mac = client.get("mac", "")
                     if mac:
@@ -1571,19 +1611,19 @@ class MistConnection:
                             }
             except Exception as e:
                 logger.debug(f"Could not fetch wireless client search: {e}")
-            
+
             # -----------------------------------------------------------------
             # Source 3: Session history (connect/disconnect times, duration)
             # -----------------------------------------------------------------
             try:
                 sessions_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(
-                    session, 
+                    session,
                     site_id,
                     duration="7d",  # Look back 7 days for historical sessions
                     limit=1000
                 )
                 sessions_results = mistapi.get_all(response=sessions_response, mist_session=session) or []
-                
+
                 for sess in sessions_results:
                     mac = sess.get("mac", "")
                     if mac:
@@ -1621,9 +1661,9 @@ class MistConnection:
                             }
             except Exception as e:
                 logger.debug(f"Could not fetch wireless client sessions: {e}")
-            
+
             return list(clients_by_mac.values())
-            
+
         except Exception as error:
             logger.error(f"Error fetching wireless clients for site {site_id}: {error}")
             raise
@@ -1631,19 +1671,19 @@ class MistConnection:
     def get_wired_clients(self, site_id: str) -> List[Dict[str, Any]]:
         """
         Get wired client information combining search and stats.
-        
+
         Retrieves wired (Ethernet-connected) client data from the Mist API
         including DHCP information, switch port details, and connection status.
-        
+
         Uses searchSiteWiredClients API which provides:
         - DHCP hostname and vendor class identifier
         - IP addresses from DHCP
         - Switch MAC and port information
         - Connection timestamps
-        
+
         Args:
             site_id: The site ID to get wired clients for
-        
+
         Returns:
             list: Client dictionaries containing:
                 - mac: Client MAC address (unique identifier)
@@ -1656,7 +1696,7 @@ class MistConnection:
                 - is_connected: True if seen within last 5 minutes
                 - switch_mac: MAC of switch serving this client
                 - port_id: Switch port identifier
-        
+
         Note:
             Connection status is inferred from last_seen timestamp.
             Clients seen within the last 5 minutes are considered connected.
@@ -1665,19 +1705,19 @@ class MistConnection:
             session = self._get_session()
             clients_by_mac = {}
             current_time = int(time.time())
-            
+
             # -----------------------------------------------------------------
             # Get wired clients from search API
             # -----------------------------------------------------------------
             try:
                 response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(
-                    session, 
+                    session,
                     site_id,
                     duration="7d",  # Look back 7 days for historical data
                     limit=1000
                 )
                 all_results = mistapi.get_all(response=response, mist_session=session) or []
-                
+
                 for client in all_results:
                     mac = client.get("mac", "")
                     if mac:
@@ -1685,10 +1725,10 @@ class MistConnection:
                         device_mac_port = client.get("device_mac_port", [])
                         ip_list = client.get("ip", [])
                         port_info = {}
-                        
+
                         if device_mac_port and isinstance(device_mac_port, list) and len(device_mac_port) > 0:
                             port_info = device_mac_port[0] if isinstance(device_mac_port[0], dict) else {}
-                        
+
                         # ---------------------------------------------------------
                         # Extract best available IP address
                         # ---------------------------------------------------------
@@ -1699,13 +1739,13 @@ class MistConnection:
                             ip = ip_list
                         elif port_info.get("ip"):
                             ip = port_info.get("ip", "")
-                        
+
                         # ---------------------------------------------------------
                         # Parse timestamps for connection timing
                         # ---------------------------------------------------------
                         timestamp = client.get("timestamp", 0)
                         port_start = port_info.get("start", 0)
-                        
+
                         # Ensure timestamps are valid integers (API may return strings)
                         if isinstance(timestamp, str):
                             try:
@@ -1717,17 +1757,17 @@ class MistConnection:
                                 port_start = int(float(port_start)) if port_start else 0
                             except (ValueError, TypeError):
                                 port_start = 0
-                        
+
                         # ---------------------------------------------------------
                         # Determine connection status
                         # ---------------------------------------------------------
                         # Consider connected if seen within last 5 minutes
                         last_seen = timestamp if timestamp else port_start
                         is_connected = (current_time - last_seen) < 300 if last_seen else False
-                        
+
                         # Use port_start as connected_time if available
                         connected_time = port_start if port_start > 0 else (timestamp if timestamp > 0 else 0)
-                        
+
                         clients_by_mac[mac] = {
                             "mac": mac,
                             "hostname": client.get("dhcp_hostname", "") or client.get("dhcp_fqdn", ""),
@@ -1742,9 +1782,9 @@ class MistConnection:
                         }
             except Exception as e:
                 logger.debug(f"Could not fetch wired clients: {e}")
-            
+
             return list(clients_by_mac.values())
-            
+
         except Exception as error:
             logger.error(f"Error fetching wired clients for site {site_id}: {error}")
             raise
@@ -1752,18 +1792,18 @@ class MistConnection:
     def get_gateway_wan_status(self, site_id: str) -> List[Dict[str, Any]]:
         """
         Get gateway device stats including WAN port information, VPN peers, and BGP peers.
-        
+
         Provides comprehensive gateway status including:
         - Basic gateway info (model, version, uptime)
         - WAN port status and statistics
         - VPN peer connectivity (Mist tunnels, IPsec)
         - BGP peering status
-        
+
         This is the main data source for the Gateway WAN Status page.
-        
+
         Args:
             site_id: The site ID to get gateway status for
-        
+
         Returns:
             list: Gateway dictionaries containing:
                 - id, name, mac, model, serial, status, version, uptime
@@ -1777,38 +1817,38 @@ class MistConnection:
                 - bgp_peers: List of BGP peer status dictionaries
                     - neighbor, neighbor_as, local_as, state
                     - up, rx_routes, tx_routes, uptime
-        
+
         Note:
             VPN and BGP peer data is fetched separately using org-level
             stats APIs (searchOrgPeerPathStats, searchOrgBgpStats).
         """
         try:
             session = self._get_session()
-            
+
             # Ensure org_id is set (required for VPN/BGP queries)
             if not self.org_id:
                 test_result = self.test_connection()
                 if not test_result["success"]:
                     raise ValueError("Could not determine organization ID")
-            
+
             # -----------------------------------------------------------------
             # Fetch gateway device stats
             # -----------------------------------------------------------------
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                session, 
-                site_id, 
-                type="gateway", 
+                session,
+                site_id,
+                type="gateway",
                 limit=100
             )
             gateways = mistapi.get_all(response=response, mist_session=session) or []
-            
+
             # Get org_id for VPN/BGP queries (guaranteed set after test_connection)
             org_id: str = self.org_id or ""
-            
+
             gateway_list = []
             for gw in gateways:
                 gw_mac = gw.get("mac", "")
-                
+
                 # Build base gateway info structure
                 gw_info = {
                     "id": gw.get("id"),
@@ -1824,24 +1864,24 @@ class MistConnection:
                     "vpn_peers": [],
                     "bgp_peers": []
                 }
-                
+
                 # -------------------------------------------------------------
                 # Extract WAN port information from if_stat
                 # -------------------------------------------------------------
                 # Only include ports where port_usage == "wan" or wan_type is set
                 if_stat = gw.get("if_stat", {})
-                
+
                 for port_name, port_stats in if_stat.items():
                     if isinstance(port_stats, dict):
                         port_usage = port_stats.get("port_usage", "")
                         wan_type = port_stats.get("wan_type", "")
-                        
+
                         # Filter to WAN ports only
                         if port_usage == "wan" or wan_type:
                             # Get IP from ips array (first IP)
                             ips = port_stats.get("ips", [])
                             ip_str = ips[0] if isinstance(ips, list) and ips else ""
-                            
+
                             wan_port = {
                                 "name": port_name,
                                 "wan_name": port_stats.get("wan_name", port_name),
@@ -1857,7 +1897,7 @@ class MistConnection:
                                 "tx_pkts": port_stats.get("tx_pkts", 0)
                             }
                             gw_info["wan_ports"].append(wan_port)
-                
+
                 # -------------------------------------------------------------
                 # Fetch VPN peers for this gateway
                 # -------------------------------------------------------------
@@ -1893,7 +1933,7 @@ class MistConnection:
                             gw_info["vpn_peers"].append(vpn_peer)
                 except Exception as e:
                     logger.debug(f"Could not fetch VPN peers for gateway {gw_mac}: {e}")
-                
+
                 # -------------------------------------------------------------
                 # Fetch BGP peers for this gateway
                 # -------------------------------------------------------------
@@ -1927,11 +1967,11 @@ class MistConnection:
                             gw_info["bgp_peers"].append(bgp_peer)
                 except Exception as e:
                     logger.debug(f"Could not fetch BGP peers for gateway {gw_mac}: {e}")
-                
+
                 gateway_list.append(gw_info)
-            
+
             return gateway_list
-            
+
         except Exception as error:
             logger.error(f"Error fetching gateway WAN status for site {site_id}: {error}")
             raise
@@ -1944,16 +1984,16 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get org-wide SLE insights for a category (wifi, wired, wan), sorted by worst performers.
-        
+
         Retrieves SLE (Service Level Experience) data for all sites in the organization
         for a specific SLE category, enabling identification of worst-performing sites.
         Uses the GET /api/v1/orgs/{org_id}/insights/sites-sle endpoint.
-        
+
         Args:
             sle_type: SLE category to retrieve. Valid values: "wifi", "wired", "wan"
             duration: Time range for aggregation. Valid values: "1d", "7d", "2w"
             limit: Maximum number of sites to return (default: 100)
-                
+
         Returns:
             Dict with keys:
                 - success (bool): Whether API call succeeded
@@ -1968,10 +2008,10 @@ class MistConnection:
                     WAN sites contain: site_id, site_name, num_gateways, num_clients,
                         application_health, gateway-health, wan-link-health
                 - error (str): Error message if success is False
-                
+
         Raises:
             Exception: If API call fails or session cannot be established
-            
+
         Example:
             insights = mist.get_org_sle_insights("wifi", "1d")
             for site in insights["sites"][:10]:
@@ -1987,10 +2027,10 @@ class MistConnection:
                 "sites": [],
                 "error": f"Invalid sle_type '{sle_type}'. Must be one of: {valid_types}"
             }
-        
+
         try:
             session = self._get_session()
-            
+
             # Ensure we have an org_id before proceeding
             if not self.org_id:
                 test_result = self.test_connection()
@@ -2002,12 +2042,12 @@ class MistConnection:
                         "sites": [],
                         "error": "Could not determine organization ID"
                     }
-            
+
             # org_id is guaranteed to be set after test_connection succeeds
             org_id: str = self.org_id or ""
-            
+
             logger.info(f"Fetching org SLE insights for type '{sle_type}' (duration: {duration})")
-            
+
             # Fetch all sites for name resolution (paginate to get all sites)
             site_name_map = {}
             page = 1
@@ -2029,9 +2069,9 @@ class MistConnection:
                     page += 1
                 else:
                     break
-            
+
             logger.debug(f"Built site name map with {len(site_name_map)} sites")
-            
+
             # Use worst-sites-by-sle endpoint which returns sites sorted by worst performers
             # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
             # The sle parameter accepts category names: "wireless", "wired", "wan"
@@ -2044,7 +2084,7 @@ class MistConnection:
                 "2w": 1209600
             }
             start_time = end_time - duration_seconds.get(duration, 86400)
-            
+
             # Map frontend category names to representative metrics
             # API doesn't accept category names like "wireless" - must use actual metrics
             # Using all_sle=true (default) returns all metrics in the same category
@@ -2054,7 +2094,7 @@ class MistConnection:
                 "wan": "gateway-health"        # Returns all WAN metrics
             }
             sle_metric = sle_metric_map.get(sle_type, "ap-availability")
-            
+
             # API supports limit param (undocumented, default is 10)
             uri = f"/api/v1/orgs/{org_id}/insights/worst-sites-by-sle"
             # mist_get expects query as a separate dict with string values
@@ -2064,7 +2104,7 @@ class MistConnection:
                 "end": str(end_time),
                 "limit": str(limit)
             }
-            
+
             # Retry logic for intermittent 400 errors from Mist API
             max_retries = 3
             response = None
@@ -2079,22 +2119,22 @@ class MistConnection:
                     time.sleep(wait_time)
                 else:
                     break
-            
+
             sites_list = []
             if response and response.status_code == 200:
                 data = response.data if hasattr(response, "data") else {}
                 results = data.get("results", []) if isinstance(data, dict) else data
-                
+
                 for site_data in results:
                     site_id = site_data.get("site_id", "")
                     site_name = site_name_map.get(site_id, "Unknown Site")
-                    
+
                     # Build site entry with all available SLE metrics
                     site_entry = {
                         "site_id": site_id,
                         "site_name": site_name
                     }
-                    
+
                     # Copy all SLE metrics from API response
                     # WiFi metrics: ap-availability, ap-health, capacity, coverage, roaming,
                     #               successful-connect, throughput, time-to-connect, num_aps, num_clients
@@ -2105,16 +2145,16 @@ class MistConnection:
                     for key, value in site_data.items():
                         if key != "site_id":
                             site_entry[key] = value
-                    
+
                     sites_list.append(site_entry)
             elif response:
                 logger.warning(f"API returned status {response.status_code} for worst-sites-by-sle")
-            
+
             # Apply client-side limit since API doesn't support limit parameter
             sites_limited = sites_list[:limit]
-            
+
             logger.info(f"Retrieved {len(sites_list)} worst sites, returning top {len(sites_limited)} for category '{sle_type}'")
-            
+
             return {
                 "success": True,
                 "sle_type": sle_type,
@@ -2122,7 +2162,7 @@ class MistConnection:
                 "sites": sites_limited,
                 "total_sites": len(sites_limited)
             }
-            
+
         except Exception as error:
             logger.error(f"Error fetching org SLE insights for type '{sle_type}': {error}")
             return {
@@ -2141,11 +2181,11 @@ class MistConnection:
     ) -> Dict[str, Any]:
         """
         Get org-wide worst sites for a SPECIFIC SLE metric.
-        
+
         Uses the GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle endpoint
-        with all_sle=false to return sites sorted by worst performance for a 
+        with all_sle=false to return sites sorted by worst performance for a
         specific metric only.
-        
+
         Args:
             metric: Specific SLE metric name. Examples:
                 WiFi: time-to-connect, successful-connect, coverage, roaming, throughput,
@@ -2154,7 +2194,7 @@ class MistConnection:
                 WAN: gateway-health, wan-link-health
             duration: Time range for aggregation. Valid values: "1h", "3h", "6h", "12h", "1d", "7d"
             limit: Maximum number of sites to return (default: 100)
-                
+
         Returns:
             Dict with keys:
                 - success (bool): Whether API call succeeded
@@ -2165,7 +2205,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            
+
             # Ensure we have an org_id
             if not self.org_id:
                 test_result = self.test_connection()
@@ -2177,11 +2217,11 @@ class MistConnection:
                         "sites": [],
                         "error": "Could not determine organization ID"
                     }
-            
+
             org_id: str = self.org_id or ""
-            
+
             logger.info(f"Fetching worst sites by metric '{metric}' (duration: {duration})")
-            
+
             # Map metric to SLE category - API only accepts wifi/wired/wan for 'sle' parameter
             metric_to_category = {
                 # WiFi metrics
@@ -2204,12 +2244,12 @@ class MistConnection:
                 "application-health": "wan",
                 "gateway-bandwidth": "wan"
             }
-            
+
             sle_category = metric_to_category.get(metric)
             if not sle_category:
                 logger.warning(f"Unknown metric '{metric}', defaulting to wifi category")
                 sle_category = "wifi"
-            
+
             # Fetch all sites for name resolution (paginate to get all sites)
             site_name_map = {}
             page = 1
@@ -2231,9 +2271,9 @@ class MistConnection:
                     page += 1
                 else:
                     break
-            
+
             logger.debug(f"Built site name map with {len(site_name_map)} sites")
-            
+
             # Calculate time range
             import time
             end_time = int(time.time())
@@ -2246,7 +2286,7 @@ class MistConnection:
                 "7d": 604800
             }
             start_time = end_time - duration_seconds.get(duration, 86400)
-            
+
             # Call the worst-sites-by-sle endpoint
             # API: GET /api/v1/orgs/{org_id}/insights/worst-sites-by-sle
             # The 'sle' param accepts the specific metric name (e.g., time-to-connect)
@@ -2258,7 +2298,7 @@ class MistConnection:
                 "end": str(end_time),
                 "limit": str(limit)
             }
-            
+
             # Retry logic for intermittent 400 errors from Mist API
             max_retries = 3
             response = None
@@ -2273,11 +2313,11 @@ class MistConnection:
                     time.sleep(wait_time)
                 else:
                     break
-            
+
             sites_list = []
             if response and response.status_code == 200:
                 data = response.data if hasattr(response, "data") else {}
-                
+
                 # API can return either {"results": [...]} or just a list
                 if isinstance(data, list):
                     results = data
@@ -2285,30 +2325,30 @@ class MistConnection:
                     results = data.get("results", [])
                 else:
                     results = []
-                
+
                 for site_data in results:
                     site_id = site_data.get("site_id", "")
                     site_name = site_name_map.get(site_id, "Unknown Site")
-                    
+
                     site_entry = {
                         "site_id": site_id,
                         "site_name": site_name
                     }
-                    
+
                     # Copy all data from API response
                     for key, value in site_data.items():
                         if key != "site_id":
                             site_entry[key] = value
-                    
+
                     sites_list.append(site_entry)
             elif response:
                 logger.warning(f"API returned status {response.status_code} for worst-sites-by-sle (metric: {metric})")
-            
+
             # Apply client-side limit since API doesn't support limit parameter
             sites_limited = sites_list[:limit]
-            
+
             logger.info(f"Retrieved {len(sites_list)} worst sites, returning top {len(sites_limited)} for metric '{metric}'")
-            
+
             return {
                 "success": True,
                 "metric": metric,
@@ -2316,7 +2356,7 @@ class MistConnection:
                 "sites": sites_limited,
                 "total_sites": len(sites_limited)
             }
-            
+
         except Exception as error:
             logger.error(f"Error fetching worst sites for metric '{metric}': {error}")
             return {
@@ -2326,3 +2366,9 @@ class MistConnection:
                 "sites": [],
                 "error": str(error)
             }
+
+
+for _method_name, _method in list(MistConnection.__dict__.items()):
+    if _method_name.startswith("_") or not inspect.isfunction(_method):
+        continue
+    setattr(MistConnection, _method_name, instrument_mist_method(_method))
