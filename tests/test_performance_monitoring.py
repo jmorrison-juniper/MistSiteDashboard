@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib
+import io
 import json
 import logging
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -99,7 +102,100 @@ def test_network_processing_split_uses_response_hook(caplog, monkeypatch):
     assert method_event["call_count"] == 1
     assert method_event["processing_ms"] >= 0
     assert http_event["route"] == "/api/v1/sites"
+    assert method_event["payload_bytes"] == 2
     assert "secret" not in json.dumps(records)
+
+
+def test_nested_method_network_time_rolls_up(caplog, monkeypatch):
+    monkeypatch.delenv("PERF_MONITORING", raising=False)
+    from perf_monitor import instrument_mist_method, record_http_response
+
+    class Worker:
+        @instrument_mist_method
+        def outer(self):
+            return self.inner()
+
+        @instrument_mist_method
+        def inner(self):
+            record_http_response(
+                SimpleNamespace(
+                    elapsed=timedelta(milliseconds=12),
+                    status_code=200,
+                    content=b"{}",
+                    url="https://api.mist.com/api/v1/self",
+                    history=[],
+                )
+            )
+            return {"success": True}
+
+    caplog.set_level(logging.INFO, logger="msd.perf")
+    assert Worker().outer() == {"success": True}
+
+    events = [record for record in perf_records(caplog) if record["event_name"] == "mist_api_method"]
+    outer_event = next(record for record in events if record["function"] == "outer")
+    assert outer_event["network_ms"] == 12.0
+    assert outer_event["call_count"] == 1
+    assert outer_event["payload_bytes"] == 2
+
+
+def test_org_level_method_does_not_log_site_id(caplog, monkeypatch):
+    monkeypatch.delenv("PERF_MONITORING", raising=False)
+    from perf_monitor import instrument_mist_method
+
+    class Worker:
+        @instrument_mist_method
+        def get_org_sle_insights(self, sle_type):
+            return {"success": True, "sle_type": sle_type}
+
+    caplog.set_level(logging.INFO, logger="msd.perf")
+    Worker().get_org_sle_insights("wifi")
+
+    event = next(record for record in perf_records(caplog) if record["event_name"] == "mist_api_method")
+    assert event["function"] == "get_org_sle_insights"
+    assert event["site_id"] is None
+
+
+def test_direct_passthrough_response_does_not_raise(caplog, monkeypatch):
+    monkeypatch.delenv("PERF_MONITORING", raising=False)
+    from flask import g, send_file
+    import app as dashboard_app
+
+    caplog.set_level(logging.INFO, logger="msd.perf")
+    with dashboard_app.app.test_request_context("/download"):
+        g.perf_start = time.perf_counter()
+        g.perf_trace_started = False
+        response = send_file(io.BytesIO(b"abc"), mimetype="text/plain", download_name="x.txt")
+        returned = dashboard_app._log_request_perf_event(response)
+
+    assert returned is response
+    event = next(record for record in perf_records(caplog) if record["event_name"] == "flask_route")
+    assert event["payload_bytes"] == 3
+    assert event["items_returned"] is None
+
+
+def test_unhandled_exception_logs_error_class(caplog, monkeypatch):
+    monkeypatch.delenv("PERF_MONITORING", raising=False)
+    import app as dashboard_app
+
+    original_view = dashboard_app.app.view_functions["health_check"]
+
+    def boom():
+        raise ValueError("boom")
+
+    caplog.set_level(logging.INFO, logger="msd.perf")
+    dashboard_app.app.view_functions["health_check"] = boom
+    monkeypatch.setitem(dashboard_app.app.config, "TESTING", False)
+    monkeypatch.setitem(dashboard_app.app.config, "PROPAGATE_EXCEPTIONS", False)
+    try:
+        with dashboard_app.app.test_client() as client:
+            response = client.get("/health")
+    finally:
+        dashboard_app.app.view_functions["health_check"] = original_view
+
+    assert response.status_code == 500
+    event = next(record for record in perf_records(caplog) if record["event_name"] == "flask_route")
+    assert event["status"] == 500
+    assert event["error_class"] == "ValueError"
 
 
 def test_get_site_health_stage_events_with_stubbed_mistapi(caplog, monkeypatch):
@@ -175,9 +271,14 @@ def test_monitoring_off_switch_suppresses_events(caplog, monkeypatch):
 
 def test_benchmark_harness_smoke(monkeypatch):
     monkeypatch.delenv("PERF_MONITORING", raising=False)
-    from scripts.benchmark_routes import run_benchmark
+    logger = logging.getLogger("msd.perf")
+    logger.disabled = False
+    import scripts.benchmark_routes as benchmark_routes
 
-    results = run_benchmark(1, "small")
+    benchmark_routes = importlib.reload(benchmark_routes)
+    assert not logger.disabled
+
+    results = benchmark_routes.run_benchmark(1, "small")
     assert results
     assert all(row["status"] < 500 for row in results)
     assert any(row["route"] == "/api/sites" for row in results)

@@ -225,7 +225,7 @@ Or leave it empty and the dashboard will auto-detect your first available organi
 
 Performance monitoring is enabled by default. Each Flask route, Mist API client method, Mist HTTP response, and `get_site_health` stage emits one JSON log line on the `msd.perf` logger. Events use one schema with route, method, site ID, duration, network and processing time, call count, payload size, item count, status, cache hit, retry count, error class, peak bytes, and UTC timestamp. Query parameters are logged as keys only; API tokens, authorization headers, and full query strings are not logged.
 
-Set `PERF_MONITORING=0` to disable performance events. Set `PERF_TRACEMALLOC=1` to include peak allocation bytes for route and Mist API method events; this is off by default.
+Set `PERF_MONITORING=0` to disable performance events. Set `PERF_TRACEMALLOC=1` to include peak allocation bytes for route and Mist API method events; this is off by default. `peak_bytes` is approximate, because tracemalloc is process-wide and overlapping or nested scopes reset the peak.
 
 Run the synthetic benchmark without Mist credentials:
 

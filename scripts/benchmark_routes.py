@@ -16,9 +16,6 @@ if str(REPO_ROOT) not in sys.path:
 
 import app as dashboard_app  # noqa: E402
 
-logging.getLogger("msd.perf").disabled = True
-logging.getLogger("app").setLevel(logging.WARNING)
-
 
 class FakeMistConnection:
     def __init__(self, size: str = "small") -> None:
@@ -137,6 +134,9 @@ def run_benchmark(iterations: int, size: str) -> list[dict[str, Any]]:
 
 
 def main() -> int:
+    logging.getLogger("msd.perf").disabled = True
+    logging.getLogger("app").setLevel(logging.WARNING)
+
     parser = argparse.ArgumentParser(description="Benchmark MistSiteDashboard routes with synthetic data.")
     parser.add_argument("--iterations", "-n", type=int, default=10, help="Requests per route.")
     parser.add_argument("--size", choices=("small", "medium", "large"), default="small", help="Synthetic payload size.")

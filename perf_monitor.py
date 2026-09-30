@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import functools
+import inspect
 import json
 import logging
 import os
@@ -127,7 +128,7 @@ def emit_perf_event(**fields: Any) -> dict[str, Any] | None:
 
 def begin_api_context() -> contextvars.Token:
     """Start an API method context for network-vs-processing attribution."""
-    return _api_call_context.set({"network_ms": 0.0, "call_count": 0, "retry_count": 0})
+    return _api_call_context.set({"network_ms": 0.0, "call_count": 0, "retry_count": 0, "payload_bytes": 0})
 
 
 def current_api_context() -> dict[str, Any] | None:
@@ -137,8 +138,18 @@ def current_api_context() -> dict[str, Any] | None:
 
 def end_api_context(token: contextvars.Token) -> dict[str, Any]:
     """End an API method context and return its accumulated counters."""
-    context = _api_call_context.get() or {"network_ms": 0.0, "call_count": 0, "retry_count": 0}
+    context = _api_call_context.get() or {"network_ms": 0.0, "call_count": 0, "retry_count": 0, "payload_bytes": 0}
     _api_call_context.reset(token)
+    parent_context = _api_call_context.get()
+    if parent_context is not None:
+        parent_context["network_ms"] = round(
+            float(parent_context.get("network_ms", 0.0)) + float(context.get("network_ms", 0.0)), 3
+        )
+        parent_context["call_count"] = int(parent_context.get("call_count", 0)) + int(context.get("call_count", 0))
+        parent_context["retry_count"] = int(parent_context.get("retry_count", 0)) + int(context.get("retry_count", 0))
+        parent_context["payload_bytes"] = int(parent_context.get("payload_bytes", 0)) + int(
+            context.get("payload_bytes", 0)
+        )
     return context
 
 
@@ -154,11 +165,13 @@ def record_http_response(response: Any, *, module: str = "mist_connection", **_:
         except (AttributeError, TypeError, ValueError):
             network_ms = 0.0
     context = current_api_context()
+    payload_bytes = response_payload_size(response)
     if context is not None:
         context["network_ms"] = round(float(context.get("network_ms", 0.0)) + network_ms, 3)
         context["call_count"] = int(context.get("call_count", 0)) + 1
         history = getattr(response, "history", None) or []
         context["retry_count"] = int(context.get("retry_count", 0)) + len(history)
+        context["payload_bytes"] = int(context.get("payload_bytes", 0)) + int(payload_bytes or 0)
     emit_perf_event(
         event_name="mist_api_http_call",
         module=module,
@@ -168,7 +181,7 @@ def record_http_response(response: Any, *, module: str = "mist_connection", **_:
         network_ms=network_ms,
         processing_ms=0.0,
         call_count=1,
-        payload_bytes=response_payload_size(response),
+        payload_bytes=payload_bytes,
         status=getattr(response, "status_code", None),
         retry_count=len(getattr(response, "history", None) or []),
     )
@@ -205,6 +218,12 @@ def result_item_count(result: Any) -> int | None:
 
 def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorate a MistConnection method with total/network/processing timing."""
+    try:
+        parameters = list(inspect.signature(func).parameters)
+        site_id_position = parameters.index("site_id") - 1 if "site_id" in parameters else None
+    except (TypeError, ValueError):
+        site_id_position = None
+
     @functools.wraps(func)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         if not perf_enabled():
@@ -214,7 +233,9 @@ def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
         start = time.perf_counter()
         error_class = None
         result: Any = None
-        site_id = args[0] if args and isinstance(args[0], str) else kwargs.get("site_id")
+        site_id = kwargs.get("site_id")
+        if site_id is None and site_id_position is not None and 0 <= site_id_position < len(args):
+            site_id = args[site_id_position]
         try:
             result = func(self, *args, **kwargs)
             return result
@@ -235,7 +256,7 @@ def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
                 processing_ms=round(max(duration_ms - network_ms, 0.0), 3),
                 call_count=int(context.get("call_count", 0)),
                 items_returned=result_item_count(result),
-                payload_bytes=len(json.dumps(result, default=str).encode("utf-8")) if result is not None else None,
+                payload_bytes=int(context.get("payload_bytes", 0)) or None,
                 retry_count=int(context.get("retry_count", 0)),
                 error_class=error_class,
                 peak_bytes=finish_peak_trace(trace_started),

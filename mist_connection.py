@@ -53,6 +53,7 @@ Example:
 import os
 import time
 import logging
+import inspect
 from typing import Dict, List, Optional, Any
 
 # Third-party imports
@@ -2368,6 +2369,6 @@ class MistConnection:
 
 
 for _method_name, _method in list(MistConnection.__dict__.items()):
-    if _method_name.startswith("_") or not callable(_method):
+    if _method_name.startswith("_") or not inspect.isfunction(_method):
         continue
     setattr(MistConnection, _method_name, instrument_mist_method(_method))

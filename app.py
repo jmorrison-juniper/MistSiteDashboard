@@ -61,7 +61,7 @@ from datetime import datetime
 from functools import wraps
 
 # Third-party imports
-from flask import Flask, Response, g, render_template, jsonify, request
+from flask import Flask, Response, g, got_request_exception, render_template, jsonify, request
 from dotenv import load_dotenv  # Loads environment variables from .env file
 from perf_monitor import emit_perf_event, finish_peak_trace, perf_enabled, start_peak_trace
 
@@ -125,7 +125,7 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 
 def _json_items_returned(response: Response) -> int | None:
     """Infer a top-level list count from JSON responses without changing them."""
-    if not response.is_json:
+    if not response.is_json or response.direct_passthrough or response.is_streamed:
         return None
     data = response.get_json(silent=True)
     if isinstance(data, list):
@@ -149,12 +149,17 @@ def _start_request_perf_timer() -> None:
     g.perf_trace_started = start_peak_trace()
 
 
+@got_request_exception.connect_via(app)
+def _capture_request_exception(sender, exception: Exception, **extra) -> None:
+    if perf_enabled():
+        g.perf_error_class = exception.__class__.__name__
+
+
 @app.after_request
 def _log_request_perf_event(response: Response) -> Response:
     if not perf_enabled() or not hasattr(g, "perf_start"):
         return response
     route_rule = request.url_rule.rule if request.url_rule else request.path
-    payload = response.get_data()
     emit_perf_event(
         event_name="flask_route",
         module=__name__,
@@ -164,7 +169,7 @@ def _log_request_perf_event(response: Response) -> Response:
         site_id=(request.view_args or {}).get("site_id"),
         duration_ms=round((time.perf_counter() - g.perf_start) * 1000, 3),
         items_returned=_json_items_returned(response),
-        payload_bytes=len(payload) if payload is not None else None,
+        payload_bytes=response.content_length,
         status=response.status_code,
         error_class=getattr(g, "perf_error_class", None),
         peak_bytes=finish_peak_trace(getattr(g, "perf_trace_started", False)),
