@@ -46,7 +46,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host files.pythonhosted.org
 
 # Copy application files
-COPY app.py mist_connection.py ./
+COPY app.py mist_connection.py perf_monitor.py ./
 COPY templates ./templates/
 
 # Set ownership to non-root user

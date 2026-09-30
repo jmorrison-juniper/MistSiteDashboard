@@ -1,0 +1,5 @@
+# Development quality gate dependencies
+-r requirements.txt
+pytest>=8.4.2,<9
+bandit>=1.9.4,<2
+pip-audit>=2.10.1,<3

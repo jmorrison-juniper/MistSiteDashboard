@@ -9,6 +9,7 @@ on:
     paths:
       - 'app.py'
       - 'mist_connection.py'
+      - 'perf_monitor.py'
       - 'requirements.txt'
       - 'Dockerfile'
       - 'templates/**'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'app.py'
       - 'mist_connection.py'
+      - 'perf_monitor.py'
       - 'requirements.txt'
       - 'Dockerfile'
       - 'templates/**'
@@ -53,6 +55,7 @@ jobs:
           echo "Checking Python syntax..."
           python -m py_compile app.py
           python -m py_compile mist_connection.py
+          python -m py_compile perf_monitor.py
           echo "Syntax check passed"
 
       - name: Run basic import test
@@ -60,6 +63,7 @@ jobs:
           echo "Testing basic imports..."
           python -c "import ast; ast.parse(open('app.py').read())"
           python -c "import ast; ast.parse(open('mist_connection.py').read())"
+          python -c "import ast; ast.parse(open('perf_monitor.py').read())"
           echo "AST parse passed"
 
   # Second job: Build the container, and push it except for a pull request.

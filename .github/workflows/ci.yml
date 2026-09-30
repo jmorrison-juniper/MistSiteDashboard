@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  gates:
+    permissions:
+      contents: read
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-python-quality-gates.yml@0b969be7f60599f9a19ebc3069161f9353a1d830 # v0.5.2
+    with:
+      python-version: '3.13'
+      cache-dependency-path: requirements*.txt
+      pytest: true
+      bandit: true
+      pip-audit: true
