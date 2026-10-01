@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import app as dashboard_app  # noqa: E402
+import app as dashboard_app
 
 
 class FakeMistConnection:
@@ -26,21 +26,48 @@ class FakeMistConnection:
         return {"success": True, "org_name": "Synthetic Org", "org_id": "org-1"}
 
     def get_sites(self) -> list[dict[str, Any]]:
-        return [{"id": f"site-{i}", "name": f"Site {i}", "timezone": "UTC"} for i in range(self.count)]
+        return [
+            {"id": f"site-{i}", "name": f"Site {i}", "timezone": "UTC"}
+            for i in range(self.count)
+        ]
 
-    def get_org_sle_insights(self, sle_type: str, duration: str = "1d") -> dict[str, Any]:
-        return {"success": True, "sle_type": sle_type, "duration": duration, "sites": self.get_sites()}
+    def get_org_sle_insights(
+        self, sle_type: str, duration: str = "1d"
+    ) -> dict[str, Any]:
+        return {
+            "success": True,
+            "sle_type": sle_type,
+            "duration": duration,
+            "sites": self.get_sites(),
+        }
 
-    def get_org_worst_sites_by_metric(self, metric: str, duration: str = "1d", limit: int = 100) -> dict[str, Any]:
-        return {"success": True, "metric": metric, "duration": duration, "sites": self.get_sites()[:limit]}
+    def get_org_worst_sites_by_metric(
+        self, metric: str, duration: str = "1d", limit: int = 100
+    ) -> dict[str, Any]:
+        return {
+            "success": True,
+            "metric": metric,
+            "duration": duration,
+            "sites": self.get_sites()[:limit],
+        }
 
     def get_site_health(self, site_id: str) -> dict[str, Any]:
         devices = [self._device(i, "ap") for i in range(self.count)]
         return {
-            "aps": {"total": self.count, "connected": self.count, "disconnected": 0, "devices": devices},
+            "aps": {
+                "total": self.count,
+                "connected": self.count,
+                "disconnected": 0,
+                "devices": devices,
+            },
             "switches": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
             "gateways": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
-            "summary": {"total": self.count, "connected": self.count, "disconnected": 0, "health_percentage": 100.0},
+            "summary": {
+                "total": self.count,
+                "connected": self.count,
+                "disconnected": 0,
+                "health_percentage": 100.0,
+            },
         }
 
     def get_site_sle(self, site_id: str, duration: str = "1d") -> dict[str, Any]:
@@ -50,25 +77,57 @@ class FakeMistConnection:
             "wan": {"metrics": {"gateway-health": 99.0}, "available": True},
         }
 
-    def get_site_devices(self, site_id: str, device_type: str = "all") -> list[dict[str, Any]]:
+    def get_site_devices(
+        self, site_id: str, device_type: str = "all"
+    ) -> list[dict[str, Any]]:
         return [self._device(i, "ap") for i in range(self.count)]
 
     def get_wireless_client_sessions(self, site_id: str) -> list[dict[str, Any]]:
-        return [{"mac": f"00:00:00:00:00:{i:02x}", "hostname": f"client-{i}", "is_connected": True} for i in range(self.count)]
+        return [
+            {
+                "mac": f"00:00:00:00:00:{i:02x}",
+                "hostname": f"client-{i}",
+                "is_connected": True,
+            }
+            for i in range(self.count)
+        ]
 
     def get_wired_clients(self, site_id: str) -> list[dict[str, Any]]:
         return self.get_wireless_client_sessions(site_id)
 
     def get_gateway_wan_status(self, site_id: str) -> list[dict[str, Any]]:
-        return [{"id": f"gw-{i}", "name": f"Gateway {i}", "status": "connected", "wan_ports": []} for i in range(max(1, self.count // 10))]
+        return [
+            {
+                "id": f"gw-{i}",
+                "name": f"Gateway {i}",
+                "status": "connected",
+                "wan_ports": [],
+            }
+            for i in range(max(1, self.count // 10))
+        ]
 
-    def get_sle_details(self, site_id: str, category: str, duration: str = "1d") -> dict[str, Any]:
-        return {"category": category, "duration": duration, "metrics": {"coverage": {"sle_value": 99.0, "classifiers": []}}}
+    def get_sle_details(
+        self, site_id: str, category: str, duration: str = "1d"
+    ) -> dict[str, Any]:
+        return {
+            "category": category,
+            "duration": duration,
+            "metrics": {"coverage": {"sle_value": 99.0, "classifiers": []}},
+        }
 
-    def get_classifier_impact_details(self, site_id: str, metric: str, classifier: str, duration: str = "1d") -> dict[str, Any]:
+    def get_classifier_impact_details(
+        self, site_id: str, metric: str, classifier: str, duration: str = "1d"
+    ) -> dict[str, Any]:
         return {"metric": metric, "classifier": classifier, "aps": []}
 
-    def get_sle_impacted_items(self, site_id: str, metric: str, item_type: str, duration: str = "1d", classifier: str | None = None) -> dict[str, Any]:
+    def get_sle_impacted_items(
+        self,
+        site_id: str,
+        metric: str,
+        item_type: str,
+        duration: str = "1d",
+        classifier: str | None = None,
+    ) -> dict[str, Any]:
         return {"metric": metric, "item_type": item_type, "items": []}
 
     def get_site_info(self, site_id: str) -> dict[str, Any]:
@@ -76,7 +135,12 @@ class FakeMistConnection:
 
     @staticmethod
     def _device(index: int, device_type: str) -> dict[str, Any]:
-        return {"id": f"{device_type}-{index}", "name": f"{device_type.upper()} {index}", "type": device_type, "status": "connected"}
+        return {
+            "id": f"{device_type}-{index}",
+            "name": f"{device_type.upper()} {index}",
+            "type": device_type,
+            "status": "connected",
+        }
 
 
 ROUTES = [
@@ -137,9 +201,18 @@ def main() -> int:
     logging.getLogger("msd.perf").disabled = True
     logging.getLogger("app").setLevel(logging.WARNING)
 
-    parser = argparse.ArgumentParser(description="Benchmark MistSiteDashboard routes with synthetic data.")
-    parser.add_argument("--iterations", "-n", type=int, default=10, help="Requests per route.")
-    parser.add_argument("--size", choices=("small", "medium", "large"), default="small", help="Synthetic payload size.")
+    parser = argparse.ArgumentParser(
+        description="Benchmark MistSiteDashboard routes with synthetic data."
+    )
+    parser.add_argument(
+        "--iterations", "-n", type=int, default=10, help="Requests per route."
+    )
+    parser.add_argument(
+        "--size",
+        choices=("small", "medium", "large"),
+        default="small",
+        help="Synthetic payload size.",
+    )
     args = parser.parse_args()
 
     print(f"Benchmark size={args.size} iterations={args.iterations}")

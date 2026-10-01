@@ -11,8 +11,9 @@ import logging
 import os
 import time
 import tracemalloc
+from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
-from typing import Any, Callable, Iterator
+from typing import Any
 from urllib.parse import urlsplit
 
 PERF_LOGGER_NAME = "msd.perf"
@@ -39,19 +40,29 @@ SCHEMA_FIELDS = (
     "timestamp_utc",
 )
 
-_api_call_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
-    "msd_perf_api_call_context", default=None
+_api_call_context: contextvars.ContextVar[dict[str, Any] | None] = (
+    contextvars.ContextVar("msd_perf_api_call_context", default=None)
 )
 
 
 def perf_enabled() -> bool:
     """Return whether performance monitoring is enabled."""
-    return os.getenv("PERF_MONITORING", "1").strip().lower() not in {"0", "false", "no", "off"}
+    return os.getenv("PERF_MONITORING", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 
 def tracemalloc_enabled() -> bool:
     """Return whether peak allocation capture is enabled."""
-    return os.getenv("PERF_TRACEMALLOC", "0").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("PERF_TRACEMALLOC", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def start_peak_trace() -> bool:
@@ -122,13 +133,17 @@ def emit_perf_event(**fields: Any) -> dict[str, Any] | None:
     for key, value in fields.items():
         if key not in event:
             event[key] = value
-    PERF_LOGGER.info(json.dumps(event, sort_keys=True, separators=(",", ":"), default=str))
+    PERF_LOGGER.info(
+        json.dumps(event, sort_keys=True, separators=(",", ":"), default=str)
+    )
     return event
 
 
 def begin_api_context() -> contextvars.Token:
     """Start an API method context for network-vs-processing attribution."""
-    return _api_call_context.set({"network_ms": 0.0, "call_count": 0, "retry_count": 0, "payload_bytes": 0})
+    return _api_call_context.set(
+        {"network_ms": 0.0, "call_count": 0, "retry_count": 0, "payload_bytes": 0}
+    )
 
 
 def current_api_context() -> dict[str, Any] | None:
@@ -138,22 +153,35 @@ def current_api_context() -> dict[str, Any] | None:
 
 def end_api_context(token: contextvars.Token) -> dict[str, Any]:
     """End an API method context and return its accumulated counters."""
-    context = _api_call_context.get() or {"network_ms": 0.0, "call_count": 0, "retry_count": 0, "payload_bytes": 0}
+    context = _api_call_context.get() or {
+        "network_ms": 0.0,
+        "call_count": 0,
+        "retry_count": 0,
+        "payload_bytes": 0,
+    }
     _api_call_context.reset(token)
     parent_context = _api_call_context.get()
     if parent_context is not None:
         parent_context["network_ms"] = round(
-            float(parent_context.get("network_ms", 0.0)) + float(context.get("network_ms", 0.0)), 3
+            float(parent_context.get("network_ms", 0.0))
+            + float(context.get("network_ms", 0.0)),
+            3,
         )
-        parent_context["call_count"] = int(parent_context.get("call_count", 0)) + int(context.get("call_count", 0))
-        parent_context["retry_count"] = int(parent_context.get("retry_count", 0)) + int(context.get("retry_count", 0))
-        parent_context["payload_bytes"] = int(parent_context.get("payload_bytes", 0)) + int(
-            context.get("payload_bytes", 0)
+        parent_context["call_count"] = int(parent_context.get("call_count", 0)) + int(
+            context.get("call_count", 0)
         )
+        parent_context["retry_count"] = int(parent_context.get("retry_count", 0)) + int(
+            context.get("retry_count", 0)
+        )
+        parent_context["payload_bytes"] = int(
+            parent_context.get("payload_bytes", 0)
+        ) + int(context.get("payload_bytes", 0))
     return context
 
 
-def record_http_response(response: Any, *, module: str = "mist_connection", **_: Any) -> None:
+def record_http_response(
+    response: Any, *, module: str = "mist_connection", **_: Any
+) -> None:
     """Requests response hook for Mist API HTTP calls."""
     if not perf_enabled():
         return
@@ -167,11 +195,15 @@ def record_http_response(response: Any, *, module: str = "mist_connection", **_:
     context = current_api_context()
     payload_bytes = response_payload_size(response)
     if context is not None:
-        context["network_ms"] = round(float(context.get("network_ms", 0.0)) + network_ms, 3)
+        context["network_ms"] = round(
+            float(context.get("network_ms", 0.0)) + network_ms, 3
+        )
         context["call_count"] = int(context.get("call_count", 0)) + 1
         history = getattr(response, "history", None) or []
         context["retry_count"] = int(context.get("retry_count", 0)) + len(history)
-        context["payload_bytes"] = int(context.get("payload_bytes", 0)) + int(payload_bytes or 0)
+        context["payload_bytes"] = int(context.get("payload_bytes", 0)) + int(
+            payload_bytes or 0
+        )
     emit_perf_event(
         event_name="mist_api_http_call",
         module=module,
@@ -206,7 +238,16 @@ def result_item_count(result: Any) -> int | None:
     if isinstance(result, list):
         return len(result)
     if isinstance(result, dict):
-        for key in ("sites", "devices", "clients", "results", "items", "aps", "switches", "gateways"):
+        for key in (
+            "sites",
+            "devices",
+            "clients",
+            "results",
+            "items",
+            "aps",
+            "switches",
+            "gateways",
+        ):
             value = result.get(key)
             if isinstance(value, list):
                 return len(value)
@@ -220,7 +261,9 @@ def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorate a MistConnection method with total/network/processing timing."""
     try:
         parameters = list(inspect.signature(func).parameters)
-        site_id_position = parameters.index("site_id") - 1 if "site_id" in parameters else None
+        site_id_position = (
+            parameters.index("site_id") - 1 if "site_id" in parameters else None
+        )
     except (TypeError, ValueError):
         site_id_position = None
 
@@ -234,7 +277,11 @@ def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
         error_class = None
         result: Any = None
         site_id = kwargs.get("site_id")
-        if site_id is None and site_id_position is not None and 0 <= site_id_position < len(args):
+        if (
+            site_id is None
+            and site_id_position is not None
+            and 0 <= site_id_position < len(args)
+        ):
             site_id = args[site_id_position]
         try:
             result = func(self, *args, **kwargs)
@@ -261,11 +308,14 @@ def instrument_mist_method(func: Callable[..., Any]) -> Callable[..., Any]:
                 error_class=error_class,
                 peak_bytes=finish_peak_trace(trace_started),
             )
+
     return wrapper
 
 
 @contextlib.contextmanager
-def stage(name: str, *, module: str, function: str, site_id: str | None = None) -> Iterator[None]:
+def stage(
+    name: str, *, module: str, function: str, site_id: str | None = None
+) -> Iterator[None]:
     """Emit a stage timing event for a block of work."""
     if not perf_enabled():
         yield

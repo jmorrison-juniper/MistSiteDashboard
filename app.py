@@ -53,17 +53,31 @@ Example:
 # Standard library imports
 import csv
 import io
+import logging
 import os
 import sys
-import logging
 import time
 from datetime import datetime
-from functools import wraps
+
+from dotenv import load_dotenv  # Loads environment variables from .env file
 
 # Third-party imports
-from flask import Flask, Response, g, got_request_exception, render_template, jsonify, request
-from dotenv import load_dotenv  # Loads environment variables from .env file
-from perf_monitor import emit_perf_event, finish_peak_trace, perf_enabled, start_peak_trace
+from flask import (
+    Flask,
+    Response,
+    g,
+    got_request_exception,
+    jsonify,
+    render_template,
+    request,
+)
+
+from perf_monitor import (
+    emit_perf_event,
+    finish_peak_trace,
+    perf_enabled,
+    start_peak_trace,
+)
 
 # =============================================================================
 # ENVIRONMENT CONFIGURATION
@@ -97,14 +111,14 @@ log_file_path = "/config/logs/app.log"
 if os.path.exists("/config/logs") and os.access("/config/logs", os.W_OK):
     try:
         log_handlers.append(logging.FileHandler(log_file_path))
-    except (PermissionError, IOError):
+    except (OSError, PermissionError):
         pass  # Gracefully skip file logging if we can't write
 
 # Apply logging configuration globally
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=log_handlers
+    handlers=log_handlers,
 )
 
 # Create module-level logger for this file
@@ -201,6 +215,7 @@ def _log_request_exception_perf_event(error: Exception | None) -> None:
         query_params=sorted(request.args.keys()),
     )
 
+
 # =============================================================================
 # MIST API CONNECTION MANAGEMENT
 # =============================================================================
@@ -238,6 +253,7 @@ def get_mist_connection() -> MistConnection:
 # =============================================================================
 # PAGE ROUTES - Serve HTML Templates
 # =============================================================================
+
 
 @app.route("/")
 def index():
@@ -279,6 +295,7 @@ def site_page(site_id):
 # API ROUTES - JSON Data Endpoints
 # =============================================================================
 
+
 @app.route("/api/test-connection", methods=["POST"])
 def test_connection():
     """
@@ -307,17 +324,26 @@ def test_connection():
 
         if result["success"]:
             logger.info("Mist API connection test successful")
-            return jsonify({
-                "success": True,
-                "message": "Connected to Mist API successfully",
-                "org_name": result.get("org_name", "Unknown")
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Connected to Mist API successfully",
+                    "org_name": result.get("org_name", "Unknown"),
+                }
+            )
         else:
-            logger.warning(f"Mist API connection test failed: {result.get('error', 'Unknown error')}")
-            return jsonify({
-                "success": False,
-                "error": result.get("error", "Connection failed")
-            }), 400
+            logger.warning(
+                f"Mist API connection test failed: {result.get('error', 'Unknown error')}"
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": result.get("error", "Connection failed"),
+                    }
+                ),
+                400,
+            )
 
     except Exception as error:
         logger.error(f"Connection test error: {error}")
@@ -407,18 +433,27 @@ def get_org_sle_insights(sle_type):
         # Validate SLE type parameter
         valid_types = ["wifi", "wired", "wan"]
         if sle_type not in valid_types:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid sle_type '{sle_type}'. Must be one of: {valid_types}"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Invalid sle_type '{sle_type}'. Must be one of: {valid_types}",
+                    }
+                ),
+                400,
+            )
 
         result = mist.get_org_sle_insights(sle_type, duration=duration)
 
         if result["success"]:
-            logger.info(f"Retrieved org SLE insights for {sle_type} (found {len(result['sites'])} sites)")
+            logger.info(
+                f"Retrieved org SLE insights for {sle_type} (found {len(result['sites'])} sites)"
+            )
             return jsonify(result)
         else:
-            logger.warning(f"Failed to get org SLE insights: {result.get('error', 'Unknown error')}")
+            logger.warning(
+                f"Failed to get org SLE insights: {result.get('error', 'Unknown error')}"
+            )
             return jsonify(result), 500
 
     except Exception as error:
@@ -456,26 +491,53 @@ def get_org_sle_by_metric(sle_type, metric):
 
         # Validate metric belongs to the category
         valid_metrics = {
-            "wifi": ["time-to-connect", "successful-connect", "coverage", "roaming",
-                     "throughput", "capacity", "ap-health", "ap-availability"],
-            "wired": ["switch-health-v2", "switch-stc", "switch-throughput", "switch-bandwidth"],
-            "wan": ["gateway-health", "wan-link-health", "application-health", "gateway-bandwidth"]
+            "wifi": [
+                "time-to-connect",
+                "successful-connect",
+                "coverage",
+                "roaming",
+                "throughput",
+                "capacity",
+                "ap-health",
+                "ap-availability",
+            ],
+            "wired": [
+                "switch-health-v2",
+                "switch-stc",
+                "switch-throughput",
+                "switch-bandwidth",
+            ],
+            "wan": [
+                "gateway-health",
+                "wan-link-health",
+                "application-health",
+                "gateway-bandwidth",
+            ],
         }
 
         if sle_type not in valid_metrics:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid sle_type: {sle_type}. Must be wifi, wired, or wan"
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": f"Invalid sle_type: {sle_type}. Must be wifi, wired, or wan",
+                    }
+                ),
+                400,
+            )
 
         # Note: We don't strictly validate metric since API may support more
         result = mist.get_org_worst_sites_by_metric(metric, duration=duration)
 
         if result["success"]:
-            logger.info(f"Retrieved worst sites for metric {metric} (found {len(result['sites'])} sites)")
+            logger.info(
+                f"Retrieved worst sites for metric {metric} (found {len(result['sites'])} sites)"
+            )
             return jsonify(result)
         else:
-            logger.warning(f"Failed to get worst sites for {metric}: {result.get('error', 'Unknown error')}")
+            logger.warning(
+                f"Failed to get worst sites for {metric}: {result.get('error', 'Unknown error')}"
+            )
             return jsonify(result), 500
 
     except Exception as error:
@@ -653,7 +715,9 @@ def get_wireless_client_sessions(site_id):
     try:
         mist = get_mist_connection()
         sessions = mist.get_wireless_client_sessions(site_id)
-        logger.info(f"Retrieved {len(sessions)} wireless client sessions for site {site_id}")
+        logger.info(
+            f"Retrieved {len(sessions)} wireless client sessions for site {site_id}"
+        )
         return jsonify({"success": True, "sessions": sessions})
     except Exception as error:
         logger.error(f"Error fetching wireless client sessions for {site_id}: {error}")
@@ -737,7 +801,9 @@ def get_gateway_wan_status(site_id):
     try:
         mist = get_mist_connection()
         gateways = mist.get_gateway_wan_status(site_id)
-        logger.info(f"Retrieved WAN status for {len(gateways)} gateways for site {site_id}")
+        logger.info(
+            f"Retrieved WAN status for {len(gateways)} gateways for site {site_id}"
+        )
         return jsonify({"success": True, "gateways": gateways})
     except Exception as error:
         logger.error(f"Error fetching gateway WAN status for {site_id}: {error}")
@@ -747,6 +813,7 @@ def get_gateway_wan_status(site_id):
 # =============================================================================
 # DETAIL PAGE ROUTES - Client and Device Detail Views
 # =============================================================================
+
 
 @app.route("/ap-clients/<site_id>")
 def ap_clients_page(site_id):
@@ -802,6 +869,7 @@ def gateway_wan_page(site_id):
 # =============================================================================
 # SLE DETAIL PAGE ROUTES - Service Level Experience Analysis
 # =============================================================================
+
 
 @app.route("/sle/wifi/<site_id>")
 def wifi_sle_page(site_id):
@@ -863,6 +931,7 @@ def wan_sle_page(site_id):
 # =============================================================================
 # SLE DETAIL API ROUTES - JSON Data for SLE Analysis Pages
 # =============================================================================
+
 
 @app.route("/api/sites/<site_id>/sle/<category>", methods=["GET"])
 def get_sle_details(site_id, category):
@@ -994,17 +1063,30 @@ def get_sle_impacted_items(site_id, metric, item_type):
         400: Invalid item_type
         500: Server error during retrieval
     """
-    valid_types = ["gateways", "interfaces", "applications", "clients", "wireless_clients"]
+    valid_types = [
+        "gateways",
+        "interfaces",
+        "applications",
+        "clients",
+        "wireless_clients",
+    ]
     if item_type not in valid_types:
-        return jsonify({
-            "error": f"Invalid item_type '{item_type}'. Must be one of: {valid_types}"
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid item_type '{item_type}'. Must be one of: {valid_types}"
+                }
+            ),
+            400,
+        )
 
     try:
         mist = get_mist_connection()
         duration = request.args.get("duration", "1d")
         classifier = request.args.get("classifier")
-        data = mist.get_sle_impacted_items(site_id, metric, item_type, duration, classifier)
+        data = mist.get_sle_impacted_items(
+            site_id, metric, item_type, duration, classifier
+        )
         return jsonify(data)
     except Exception as error:
         logger.error(f"Error fetching impacted {item_type}: {error}")
@@ -1014,6 +1096,7 @@ def get_sle_impacted_items(site_id, metric, item_type):
 # =============================================================================
 # SLE CSV EXPORT ENDPOINT
 # =============================================================================
+
 
 @app.route("/api/sites/<site_id>/sle/<category>/csv", methods=["GET"])
 def export_sle_csv(site_id, category):
@@ -1041,9 +1124,14 @@ def export_sle_csv(site_id, category):
     """
     valid_categories = ["wifi", "wired", "wan"]
     if category not in valid_categories:
-        return jsonify({
-            "error": f"Invalid category: {category}. Must be one of: {valid_categories}"
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Invalid category: {category}. Must be one of: {valid_categories}"
+                }
+            ),
+            400,
+        )
 
     try:
         mist = get_mist_connection()
@@ -1053,7 +1141,9 @@ def export_sle_csv(site_id, category):
         site_info = mist.get_site_info(site_id)
         site_name = site_info.get("name", site_id)
         # Sanitize site name for filename (remove special chars, replace spaces)
-        safe_site_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in site_name)
+        safe_site_name = "".join(
+            c if c.isalnum() or c in "-_" else "_" for c in site_name
+        )
 
         data = mist.get_sle_details(site_id, category, duration)
 
@@ -1062,13 +1152,15 @@ def export_sle_csv(site_id, category):
         writer = csv.writer(output)
 
         # Write header
-        writer.writerow([
-            "Metric",
-            "SLE Value (%)",
-            "Classifier",
-            "Contribution (%)",
-            "Impact Count"
-        ])
+        writer.writerow(
+            [
+                "Metric",
+                "SLE Value (%)",
+                "Classifier",
+                "Contribution (%)",
+                "Impact Count",
+            ]
+        )
 
         # Flatten metrics and classifiers into rows
         metrics = data.get("metrics", {})
@@ -1081,14 +1173,18 @@ def export_sle_csv(site_id, category):
                 for classifier in classifiers:
                     classifier_name = classifier.get("name", "Unknown")
                     contribution = classifier.get("contribution", 0)
-                    impact_count = classifier.get("impact_count", classifier.get("degraded", 0))
-                    writer.writerow([
-                        metric_name,
-                        sle_display,
-                        classifier_name,
-                        f"{contribution:.1f}" if contribution else "0.0",
-                        impact_count
-                    ])
+                    impact_count = classifier.get(
+                        "impact_count", classifier.get("degraded", 0)
+                    )
+                    writer.writerow(
+                        [
+                            metric_name,
+                            sle_display,
+                            classifier_name,
+                            f"{contribution:.1f}" if contribution else "0.0",
+                            impact_count,
+                        ]
+                    )
             else:
                 # Metric with no classifiers - write single row
                 writer.writerow([metric_name, sle_display, "", "", ""])
@@ -1102,7 +1198,7 @@ def export_sle_csv(site_id, category):
         return Response(
             csv_content,
             mimetype="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except Exception as error:
@@ -1113,6 +1209,7 @@ def export_sle_csv(site_id, category):
 # =============================================================================
 # HEALTH CHECK ENDPOINT - Container Orchestration Support
 # =============================================================================
+
 
 @app.route("/health")
 def health_check():
