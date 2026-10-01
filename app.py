@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 MistSiteDashboard - Juniper Mist Site Health Dashboard
 

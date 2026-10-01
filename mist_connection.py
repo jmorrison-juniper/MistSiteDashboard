@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Mist API Connection Module for MistSiteDashboard
 
