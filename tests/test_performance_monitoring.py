@@ -10,15 +10,17 @@ from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
 def perf_records(caplog):
-    return [json.loads(record.message) for record in caplog.records if record.name == "msd.perf"]
+    return [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "msd.perf"
+    ]
 
 
 class FakeMistConnection:
@@ -33,7 +35,12 @@ class FakeMistConnection:
             "aps": {"total": 1, "connected": 1, "disconnected": 0, "devices": []},
             "switches": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
             "gateways": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
-            "summary": {"total": 1, "connected": 1, "disconnected": 0, "health_percentage": 100.0},
+            "summary": {
+                "total": 1,
+                "connected": 1,
+                "disconnected": 0,
+                "health_percentage": 100.0,
+            },
         }
 
 
@@ -42,7 +49,9 @@ def test_event_schema_and_json_output(caplog, monkeypatch):
     from perf_monitor import SCHEMA_FIELDS, emit_perf_event
 
     caplog.set_level(logging.INFO, logger="msd.perf")
-    event = emit_perf_event(event_name="unit", module="tests", function="schema", duration_ms=1.23)
+    event = emit_perf_event(
+        event_name="unit", module="tests", function="schema", duration_ms=1.23
+    )
 
     assert event is not None
     records = perf_records(caplog)
@@ -67,9 +76,20 @@ def test_request_hooks_log_route_event(caplog, monkeypatch):
         assert client.get("/api/sites?duration=1d&token=secret").status_code == 200
         assert client.get("/api/sites/site-1/health").status_code == 200
 
-    route_events = [record for record in perf_records(caplog) if record["event_name"] == "flask_route"]
-    assert {event["route"] for event in route_events} >= {"/health", "/", "/api/sites", "/api/sites/<site_id>/health"}
-    sites_event = next(event for event in route_events if event["route"] == "/api/sites")
+    route_events = [
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "flask_route"
+    ]
+    assert {event["route"] for event in route_events} >= {
+        "/health",
+        "/",
+        "/api/sites",
+        "/api/sites/<site_id>/health",
+    }
+    sites_event = next(
+        event for event in route_events if event["route"] == "/api/sites"
+    )
     assert sites_event["items_returned"] == 1
     assert sites_event["query_params"] == ["duration", "token"]
     assert "secret" not in json.dumps(route_events)
@@ -96,8 +116,12 @@ def test_network_processing_split_uses_response_hook(caplog, monkeypatch):
     assert Worker().fetch() == [{"id": "site-1"}]
 
     records = perf_records(caplog)
-    method_event = next(record for record in records if record["event_name"] == "mist_api_method")
-    http_event = next(record for record in records if record["event_name"] == "mist_api_http_call")
+    method_event = next(
+        record for record in records if record["event_name"] == "mist_api_method"
+    )
+    http_event = next(
+        record for record in records if record["event_name"] == "mist_api_http_call"
+    )
     assert method_event["network_ms"] == 12.0
     assert method_event["call_count"] == 1
     assert method_event["processing_ms"] >= 0
@@ -131,7 +155,11 @@ def test_nested_method_network_time_rolls_up(caplog, monkeypatch):
     caplog.set_level(logging.INFO, logger="msd.perf")
     assert Worker().outer() == {"success": True}
 
-    events = [record for record in perf_records(caplog) if record["event_name"] == "mist_api_method"]
+    events = [
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "mist_api_method"
+    ]
     outer_event = next(record for record in events if record["function"] == "outer")
     assert outer_event["network_ms"] == 12.0
     assert outer_event["call_count"] == 1
@@ -150,7 +178,11 @@ def test_org_level_method_does_not_log_site_id(caplog, monkeypatch):
     caplog.set_level(logging.INFO, logger="msd.perf")
     Worker().get_org_sle_insights("wifi")
 
-    event = next(record for record in perf_records(caplog) if record["event_name"] == "mist_api_method")
+    event = next(
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "mist_api_method"
+    )
     assert event["function"] == "get_org_sle_insights"
     assert event["site_id"] is None
 
@@ -158,17 +190,24 @@ def test_org_level_method_does_not_log_site_id(caplog, monkeypatch):
 def test_direct_passthrough_response_does_not_raise(caplog, monkeypatch):
     monkeypatch.delenv("PERF_MONITORING", raising=False)
     from flask import g, send_file
+
     import app as dashboard_app
 
     caplog.set_level(logging.INFO, logger="msd.perf")
     with dashboard_app.app.test_request_context("/download"):
         g.perf_start = time.perf_counter()
         g.perf_trace_started = False
-        response = send_file(io.BytesIO(b"abc"), mimetype="text/plain", download_name="x.txt")
+        response = send_file(
+            io.BytesIO(b"abc"), mimetype="text/plain", download_name="x.txt"
+        )
         returned = dashboard_app._log_request_perf_event(response)
 
     assert returned is response
-    event = next(record for record in perf_records(caplog) if record["event_name"] == "flask_route")
+    event = next(
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "flask_route"
+    )
     assert event["payload_bytes"] == 3
     assert event["items_returned"] is None
 
@@ -193,7 +232,11 @@ def test_unhandled_exception_logs_error_class(caplog, monkeypatch):
         dashboard_app.app.view_functions["health_check"] = original_view
 
     assert response.status_code == 500
-    event = next(record for record in perf_records(caplog) if record["event_name"] == "flask_route")
+    event = next(
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "flask_route"
+    )
     assert event["status"] == 500
     assert event["error_class"] == "ValueError"
 
@@ -209,31 +252,52 @@ def test_get_site_health_stage_events_with_stubbed_mistapi(caplog, monkeypatch):
     monkeypatch.setattr(
         mist_connection.mistapi.api.v1.orgs.templates,
         "listOrgTemplates",
-        lambda session, org_id: SimpleNamespace(data=[{"id": "tmpl-1", "deviceprofile_ids": ["dp-1"], "filter_by_deviceprofile": True}]),
+        lambda session, org_id: SimpleNamespace(
+            data=[
+                {
+                    "id": "tmpl-1",
+                    "deviceprofile_ids": ["dp-1"],
+                    "filter_by_deviceprofile": True,
+                }
+            ]
+        ),
     )
     monkeypatch.setattr(
         mist_connection.mistapi.api.v1.orgs.wlans,
         "listOrgWlans",
-        lambda session, org_id: SimpleNamespace(data=[{"ssid": "Corp", "template_id": "tmpl-1", "enabled": True}]),
+        lambda session, org_id: SimpleNamespace(
+            data=[{"ssid": "Corp", "template_id": "tmpl-1", "enabled": True}]
+        ),
     )
     monkeypatch.setattr(
         mist_connection.mistapi.api.v1.sites.stats,
         "listSiteDevicesStats",
         lambda session, site_id, **kwargs: SimpleNamespace(data=[]),
     )
-    monkeypatch.setattr(
-        mist_connection.mistapi,
-        "get_all",
-        lambda response, mist_session: [
-            {"id": "ap-1", "type": "ap", "status": "connected", "deviceprofile_id": "dp-1", "port_stat": {"eth0": {"speed": 1000}}}
-        ],
-    )
+
+    def fake_get_all(response, mist_session):
+        assert mist_session is conn.session
+        return [
+            {
+                "id": "ap-1",
+                "type": "ap",
+                "status": "connected",
+                "deviceprofile_id": "dp-1",
+                "port_stat": {"eth0": {"speed": 1000}},
+            }
+        ]
+
+    monkeypatch.setattr(mist_connection.mistapi, "get_all", fake_get_all)
 
     caplog.set_level(logging.INFO, logger="msd.perf")
     health = conn.get_site_health("site-1")
 
     assert health["summary"]["total"] == 1
-    stage_functions = {record["function"] for record in perf_records(caplog) if record["event_name"] == "mist_api_stage"}
+    stage_functions = {
+        record["function"]
+        for record in perf_records(caplog)
+        if record["event_name"] == "mist_api_stage"
+    }
     assert {
         "get_site_health.template_fetch",
         "get_site_health.wlan_mapping",
@@ -255,7 +319,11 @@ def test_tracemalloc_switch_adds_peak_bytes(caplog, monkeypatch):
 
     caplog.set_level(logging.INFO, logger="msd.perf")
     Worker().build()
-    event = next(record for record in perf_records(caplog) if record["event_name"] == "mist_api_method")
+    event = next(
+        record
+        for record in perf_records(caplog)
+        if record["event_name"] == "mist_api_method"
+    )
     assert isinstance(event["peak_bytes"], int)
     assert event["peak_bytes"] > 0
 
@@ -273,7 +341,7 @@ def test_benchmark_harness_smoke(monkeypatch):
     monkeypatch.delenv("PERF_MONITORING", raising=False)
     logger = logging.getLogger("msd.perf")
     logger.disabled = False
-    import scripts.benchmark_routes as benchmark_routes
+    from scripts import benchmark_routes
 
     benchmark_routes = importlib.reload(benchmark_routes)
     assert not logger.disabled

@@ -17,6 +17,21 @@ jobs:
     with:
       python-version: '3.13'
       cache-dependency-path: requirements*.txt
+      ruff: true
+      black: true
+      mypy: true
       pytest: true
       bandit: true
       pip-audit: true
+      vulture: true
+
+  quality_gate_issues:
+    name: "Sync quality-gate issues"
+    needs: gates
+    if: ${{ always() }}
+    permissions:
+      issues: write
+      pull-requests: read
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-quality-gate-issues.yml@b140350ebc40e61b57a3a65731c0df520f143661 # v0.6.0
+    with:
+      results: ${{ needs.gates.outputs.results }}
