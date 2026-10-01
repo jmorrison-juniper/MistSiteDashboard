@@ -79,6 +79,9 @@ from perf_monitor import (
 # Inherits configuration from app.py when used as a module
 logger = logging.getLogger(__name__)
 
+NestedRecord = dict[str, Any]
+HealthData = dict[str, NestedRecord]
+
 
 # =============================================================================
 # MIST CONNECTION CLASS
@@ -495,7 +498,7 @@ class MistConnection:
             # -----------------------------------------------------------------
             # Initialize health data structure
             # -----------------------------------------------------------------
-            health_data = {
+            health_data: HealthData = {
                 "aps": {"total": 0, "connected": 0, "disconnected": 0, "devices": []},
                 "switches": {
                     "total": 0,
@@ -706,7 +709,7 @@ class MistConnection:
             # -----------------------------------------------------------------
             # Initialize SLE data structure
             # -----------------------------------------------------------------
-            sle_data = {
+            sle_data: dict[str, NestedRecord] = {
                 "wifi": {"metrics": {}, "available": False},
                 "wired": {"metrics": {}, "available": False},
                 "wan": {"metrics": {}, "available": False},
@@ -2038,9 +2041,7 @@ class MistConnection:
 
                         # Use port_start as connected_time if available
                         connected_time = (
-                            port_start
-                            if port_start > 0
-                            else (max(0, timestamp))
+                            port_start if port_start > 0 else (max(0, timestamp))
                         )
 
                         clients_by_mac[mac] = {

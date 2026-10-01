@@ -57,7 +57,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv  # Loads environment variables from .env file
 
@@ -103,7 +103,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # Configure log handlers
 # - Always include stdout for container compatibility (logs to docker/podman logs)
 # - Optionally add file handler for persistent logging in container environments
-log_handlers = [logging.StreamHandler(sys.stdout)]
+log_handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
 log_file_path = "/config/logs/app.log"
 
 # Only attempt file logging if the logs directory exists and is writable
@@ -164,7 +164,7 @@ def _start_request_perf_timer() -> None:
 
 
 @got_request_exception.connect_via(app)
-def _capture_request_exception(sender, exception: Exception, **extra) -> None:
+def _capture_request_exception(_sender, exception: Exception, **_extra) -> None:
     if perf_enabled():
         g.perf_error_class = exception.__class__.__name__
 
@@ -194,7 +194,7 @@ def _log_request_perf_event(response: Response) -> Response:
 
 
 @app.teardown_request
-def _log_request_exception_perf_event(error: Exception | None) -> None:
+def _log_request_exception_perf_event(error: BaseException | None) -> None:
     if not perf_enabled() or error is None:
         return
     g.perf_error_class = error.__class__.__name__
@@ -1230,7 +1230,7 @@ def health_check():
         curl http://localhost:5000/health
         {"status": "healthy", "timestamp": "2024-12-16T12:00:00"}
     """
-    return jsonify({"status": "healthy", "timestamp": datetime.utcnow().isoformat()})
+    return jsonify({"status": "healthy", "timestamp": datetime.now(UTC).isoformat()})
 
 
 # =============================================================================
@@ -1241,7 +1241,7 @@ if __name__ == "__main__":
     # Get server configuration from environment variables
     # PORT: Web server port (default 5000 for local development)
     # FLASK_DEBUG: Enable debug mode (auto-reload, detailed errors)
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", "5000"))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
     logger.info(f"Starting MistSiteDashboard on port {port}")

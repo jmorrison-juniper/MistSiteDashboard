@@ -8,7 +8,7 @@ import statistics
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -165,12 +165,12 @@ def percentile(values: list[float], pct: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
-    index = min(len(ordered) - 1, int(round((pct / 100) * (len(ordered) - 1))))
+    index = min(len(ordered) - 1, round((pct / 100) * (len(ordered) - 1)))
     return ordered[index]
 
 
 def run_benchmark(iterations: int, size: str) -> list[dict[str, Any]]:
-    dashboard_app._mist_connection = FakeMistConnection(size)
+    dashboard_app._mist_connection = cast(Any, FakeMistConnection(size))
     dashboard_app.app.config["TESTING"] = True
     results: list[dict[str, Any]] = []
     with dashboard_app.app.test_client() as client:

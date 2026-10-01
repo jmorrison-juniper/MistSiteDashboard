@@ -12,7 +12,7 @@ import os
 import time
 import tracemalloc
 from collections.abc import Callable, Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -88,7 +88,7 @@ def finish_peak_trace(started: bool) -> int | None:
 
 def now_utc_iso() -> str:
     """Return an ISO-8601 UTC timestamp."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def duration_ms_since(start: float) -> float:

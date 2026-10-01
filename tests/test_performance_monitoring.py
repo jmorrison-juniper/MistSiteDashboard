@@ -274,10 +274,10 @@ def test_get_site_health_stage_events_with_stubbed_mistapi(caplog, monkeypatch):
         "listSiteDevicesStats",
         lambda session, site_id, **kwargs: SimpleNamespace(data=[]),
     )
-    monkeypatch.setattr(
-        mist_connection.mistapi,
-        "get_all",
-        lambda response, mist_session: [
+
+    def fake_get_all(response, mist_session):
+        assert mist_session is conn.session
+        return [
             {
                 "id": "ap-1",
                 "type": "ap",
@@ -285,8 +285,9 @@ def test_get_site_health_stage_events_with_stubbed_mistapi(caplog, monkeypatch):
                 "deviceprofile_id": "dp-1",
                 "port_stat": {"eth0": {"speed": 1000}},
             }
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(mist_connection.mistapi, "get_all", fake_get_all)
 
     caplog.set_level(logging.INFO, logger="msd.perf")
     health = conn.get_site_health("site-1")

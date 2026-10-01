@@ -1,2 +1,17 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+ignore = [
+    # Flask routes and Mist SDK wrappers log and convert unexpected API failures
+    # into JSON responses, so users do not lose the dashboard session.
+    "BLE001",
+]
+
+[[tool.mypy.overrides]]
+# mistapi publishes no type information, so mypy cannot analyze its SDK modules.
+module = ["mistapi", "mistapi.*"]
+ignore_missing_imports = true
