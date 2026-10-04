@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Keeps the actions and the misthelper-devtools workflow pins up to date.
+  # Keeps workflow actions and pinned misthelper-devtools workflow references up to date.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -9,3 +9,7 @@ updates:
       github-actions:
         patterns:
           - "*"
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
