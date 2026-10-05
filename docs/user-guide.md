@@ -371,6 +371,10 @@ The `container-build.yml` workflow calls the shared `reusable-container-image.ym
 
 ## Changelog
 
+### version 26.10.05.05.10
+
+- Added shared agent instructions and repository-specific development guidance.
+
 ### version 26.10.05.01.30
 
 - Split complex Mist API data-processing paths into typed class helpers, added
