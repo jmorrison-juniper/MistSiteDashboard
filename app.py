@@ -136,6 +136,41 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 
 
+class ApiErrorResponse:
+    """Build the JSON error response of an API route after an unexpected exception.
+
+    The server log keeps the exception text and the stack trace. The client gets a
+    generic message, because an exception message can hold internal detail.
+    """
+
+    GENERIC_MESSAGE = "An internal error occurred. Examine the server log for details."
+    STATUS_CODE = 500
+
+    @classmethod
+    def from_exception(
+        cls,
+        error: Exception,
+        action: str,
+        *values: object,
+        include_success: bool = True,
+    ) -> tuple[Response, int]:
+        """Log the exception on the server and return a generic error with status 500.
+
+        The ``action`` template and ``values`` describe the failed request in the log.
+        Set ``include_success`` to False for a route whose body has no success key.
+        """
+        # Full detail and the stack trace stay in the server log.
+        logger.error(action + ": %s", *values, error, exc_info=error)
+        # No exception text leaves the server.
+        body: dict[str, object] = {"error": cls.GENERIC_MESSAGE}
+        if include_success:  # Most routes send a success flag that the pages read.
+            # Keep the key order of the previous body.
+            body = {"success": False, **body}
+        logger.debug("Sent generic API error with status %s", cls.STATUS_CODE)
+        # The status code stays the same as before.
+        return jsonify(body), cls.STATUS_CODE
+
+
 def _json_items_returned(response: Response) -> int | None:
     """Infer a top-level list count from JSON responses without changing them."""
     if not response.is_json or response.direct_passthrough or response.is_streamed:
@@ -345,8 +380,8 @@ def test_connection():
             )
 
     except Exception as error:
-        logger.error(f"Connection test error: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(error, "Connection test error")
 
 
 @app.route("/api/sites", methods=["GET"])
@@ -379,8 +414,8 @@ def get_sites():
         logger.info(f"Retrieved {len(sites)} sites from Mist API")
         return jsonify({"success": True, "sites": sites})
     except Exception as error:
-        logger.error(f"Error fetching sites: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(error, "Error fetching sites")
 
 
 @app.route("/api/org/sle/<sle_type>", methods=["GET"])
@@ -456,8 +491,10 @@ def get_org_sle_insights(sle_type):
             return jsonify(result), 500
 
     except Exception as error:
-        logger.error(f"Error fetching org SLE insights for {sle_type}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching org SLE insights for %s", sle_type
+        )
 
 
 @app.route("/api/org/sle/<sle_type>/metric/<metric>", methods=["GET"])
@@ -540,8 +577,10 @@ def get_org_sle_by_metric(sle_type, metric):
             return jsonify(result), 500
 
     except Exception as error:
-        logger.error(f"Error fetching worst sites for metric {metric}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching worst sites for metric %s", metric
+        )
 
 
 @app.route("/api/sites/<site_id>/health", methods=["GET"])
@@ -577,8 +616,10 @@ def get_site_health(site_id):
         logger.info(f"Retrieved health data for site {site_id}")
         return jsonify({"success": True, "health": health_data})
     except Exception as error:
-        logger.error(f"Error fetching site health for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching site health for %s", site_id
+        )
 
 
 @app.route("/api/sites/<site_id>/sle", methods=["GET"])
@@ -625,8 +666,10 @@ def get_site_sle(site_id):
         logger.info(f"Retrieved SLE data for site {site_id} (duration: {duration})")
         return jsonify({"success": True, "sle": sle_data, "duration": duration})
     except Exception as error:
-        logger.error(f"Error fetching site SLE for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching site SLE for %s", site_id
+        )
 
 
 @app.route("/api/sites/<site_id>/devices", methods=["GET"])
@@ -672,8 +715,10 @@ def get_site_devices(site_id):
         logger.info(f"Retrieved {len(devices)} devices for site {site_id}")
         return jsonify({"success": True, "devices": devices})
     except Exception as error:
-        logger.error(f"Error fetching site devices for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching site devices for %s", site_id
+        )
 
 
 @app.route("/api/sites/<site_id>/wireless-clients", methods=["GET"])
@@ -719,8 +764,10 @@ def get_wireless_client_sessions(site_id):
         )
         return jsonify({"success": True, "sessions": sessions})
     except Exception as error:
-        logger.error(f"Error fetching wireless client sessions for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching wireless client sessions for %s", site_id
+        )
 
 
 @app.route("/api/sites/<site_id>/wired-clients", methods=["GET"])
@@ -761,8 +808,10 @@ def get_wired_clients(site_id):
         logger.info(f"Retrieved {len(clients)} wired clients for site {site_id}")
         return jsonify({"success": True, "clients": clients})
     except Exception as error:
-        logger.error(f"Error fetching wired clients for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching wired clients for %s", site_id
+        )
 
 
 @app.route("/api/sites/<site_id>/gateway-wan", methods=["GET"])
@@ -805,8 +854,10 @@ def get_gateway_wan_status(site_id):
         )
         return jsonify({"success": True, "gateways": gateways})
     except Exception as error:
-        logger.error(f"Error fetching gateway WAN status for {site_id}: {error}")
-        return jsonify({"success": False, "error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching gateway WAN status for %s", site_id
+        )
 
 
 # =============================================================================
@@ -972,8 +1023,10 @@ def get_sle_details(site_id, category):
         data = mist.get_sle_details(site_id, category, duration)
         return jsonify(data)
     except Exception as error:
-        logger.error(f"Error fetching SLE details: {error}")
-        return jsonify({"error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching SLE details", include_success=False
+        )
 
 
 @app.route("/api/sites/<site_id>/sle/impact/<metric>/<classifier>", methods=["GET"])
@@ -1013,8 +1066,10 @@ def get_classifier_impact(site_id, metric, classifier):
         data = mist.get_classifier_impact_details(site_id, metric, classifier, duration)
         return jsonify(data)
     except Exception as error:
-        logger.error(f"Error fetching classifier impact: {error}")
-        return jsonify({"error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching classifier impact", include_success=False
+        )
 
 
 @app.route("/api/sites/<site_id>/sle/<metric>/impacted/<item_type>", methods=["GET"])
@@ -1088,8 +1143,10 @@ def get_sle_impacted_items(site_id, metric, item_type):
         )
         return jsonify(data)
     except Exception as error:
-        logger.error(f"Error fetching impacted {item_type}: {error}")
-        return jsonify({"error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error fetching impacted %s", item_type, include_success=False
+        )
 
 
 # =============================================================================
@@ -1201,8 +1258,10 @@ def export_sle_csv(site_id, category):
         )
 
     except Exception as error:
-        logger.error(f"Error exporting SLE CSV: {error}")
-        return jsonify({"error": str(error)}), 500
+        # The log keeps the detail, and the client gets a generic message.
+        return ApiErrorResponse.from_exception(
+            error, "Error exporting SLE CSV", include_success=False
+        )
 
 
 # =============================================================================

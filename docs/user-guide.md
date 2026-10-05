@@ -371,6 +371,13 @@ The `container-build.yml` workflow calls the shared `reusable-container-image.ym
 
 ## Changelog
 
+### version 26.10.05.17.45
+
+- The API routes do not send exception text to the browser. When a request
+  fails, the server log keeps the full error, and the response holds a generic
+  message with the same status and shape. This repairs the CodeQL finding
+  `py/stack-trace-exposure`.
+
 ### version 26.10.05.05.10
 
 - Added shared agent instructions and repository-specific development guidance.
