@@ -14,3 +14,8 @@ target-version = "py313"
 # mistapi publishes no type information, so mypy cannot analyze its SDK modules.
 module = ["mistapi", "mistapi.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Optional screenshot tooling is installed only for local browser capture.
+module = ["playwright", "playwright.*"]
+ignore_missing_imports = true
