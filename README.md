@@ -1,457 +1,56 @@
-# MistSiteDashboard
+## What
 
-View device health and SLE (Service Level Experience) metrics for Juniper Mist sites in a clean, modern web interface.
+**MistSiteDashboard** is a Flask web dashboard for Juniper Mist device health and
+Service Level Experience (SLE). Explore organization performance, site health,
+wireless and wired clients, and gateway WAN status.
 
-![Dashboard Preview](https://img.shields.io/badge/Status-Development-yellow)
-![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)
-![Container](https://img.shields.io/badge/Container-ghcr.io-purple)
+These are genuine application screens rendered locally with synthetic data, not
+live customer information.
 
-## Screenshots
+![Organization dashboard with synthetic sites](docs/screenshots/offline-organization.png)
+![Site health dashboard with synthetic devices](docs/screenshots/offline-site.png)
+![Wireless client history with synthetic sessions](docs/screenshots/offline-wireless-clients.png)
+![Wired client history with synthetic clients](docs/screenshots/offline-wired-clients.png)
 
-### Organization-Level Views
+## How
 
-![Org Dashboard - Site Selector](docs/screenshots/Screenshot%202026-02-18%20095919.png)
-*Org-Wide Mist Site Dashboard showing worst 100 sites with WiFi/Wired/WAN tabs*
+Follow the [user guide](docs/user-guide.md#quick-start) to configure a Mist API
+token and start the dashboard in a container or
+[directly with Python](docs/user-guide.md#running-as-a-python-script-no-container).
+Open `http://localhost:5000`, select a site, and drill into health or SLE details.
+Keep credentials out of source control.
 
-![Org WiFi Dashboard](docs/screenshots/Screenshot%202026-02-18%20095904.png)
-*Org-wide WiFi performance sorted by Time to Connect metric*
+For a credential-free local preview, use the
+[offline demo and screenshot instructions](docs/offline-screenshots.md).
 
-![Org WAN Dashboard](docs/screenshots/Screenshot%202026-02-18%20100006.png)
-*Org-wide WAN performance showing WAN edge health, link health, and app health*
+## Where
 
-### Site-Level Views
+Source and issue tracking live in
+[jmorrison-juniper/MistSiteDashboard](https://github.com/jmorrison-juniper/MistSiteDashboard).
+Container images are published to `ghcr.io/jmorrison-juniper/mistsitedashboard`.
+Detailed [features](docs/user-guide.md#features),
+[configuration](docs/user-guide.md#configuration),
+[API endpoints](docs/user-guide.md#mist-api-endpoints-used), and
+[architecture](docs/user-guide.md#architecture) are in `docs/`.
 
-![Site Dashboard](docs/screenshots/Screenshot%202026-02-18%20100045.png)
-*Single site selected showing device health (APs, Switches, Gateways) and SLE metrics*
+## When
 
-### Client History
+Use the dashboard during routine network checks or incident investigation.
+Choose a time range to compare recent and historical service quality.
+See the [changelog](docs/user-guide.md#changelog) for release history and
+[performance monitoring](docs/user-guide.md#performance-monitoring) for timing
+and benchmark guidance.
 
-![Wireless Client History](docs/screenshots/screenshot-04.png)
-*Wireless client history (last 7 days) showing sessions, unique clients, SSIDs, and connection details*
+## Why
 
-![Wired Client History](docs/screenshots/screenshot-05.png)
-*Wired client history showing switch connections, hostnames, IPs, and session durations*
+Bring device availability, service-quality scores, and affected clients together
+so network operations staff can identify where to investigate next.
+Use [CSV exports](docs/user-guide.md#features) for offline analysis.
 
-### Gateway WAN Status
+## Who
 
-![Gateway WAN Ports](docs/screenshots/screenshot-06.png)
-*Gateway WAN port configuration showing IP, interface, WAN type, and device details*
-
-![VPN & BGP Peers](docs/screenshots/screenshot-07.png)
-*Gateway VPN peer status with latency/jitter/loss/MOS metrics and BGP peer routing info*
-
-### WiFi SLE Details
-
-![WiFi SLE Details](docs/screenshots/Screenshot%202026-02-18%20100144.png)
-*Full WiFi SLE page with AP availability, coverage, throughput, roaming, and classifier breakdowns*
-
-![WiFi Interference - Device Types](docs/screenshots/Screenshot%202026-02-18%20100323.png)
-*Pop-up showing device categories (iOS, iPad, etc.) affected by WiFi interference*
-
-![WiFi Interference - Clients](docs/screenshots/Screenshot%202026-02-18%20100239.png)
-*Pop-up showing individual clients suffering WiFi interference with degraded duration and impact %*
-
-### WAN SLE Details
-
-![WAN SLE Details](docs/screenshots/Screenshot%202026-02-18%20100505.png)
-*Full WAN SLE page with application health, gateway utilization, WAN link health, and classifiers*
-
-![WAN App Services - Interfaces](docs/screenshots/Screenshot%202026-02-18%20100526.png)
-*Pop-up showing gateway interfaces contributing to application disconnects*
-
-![WAN App Services - Applications](docs/screenshots/Screenshot%202026-02-18%20100608.png)
-*Pop-up showing affected applications with WAN health metrics and failure rates*
-
-### Wired SLE Details
-
-![Wired SLE Details](docs/screenshots/Screenshot%202026-02-18%20101004.png)
-*Full Wired SLE page with switch health, time to connect, throughput, and DHCP classifiers*
-
-![Wired DHCP - Affected Devices](docs/screenshots/Screenshot%202026-02-18%20101021.png)
-*Pop-up showing switches impacted by DHCP delays*
-
-### Data Export
-
-![CSV Export](docs/screenshots/Screenshot%202026-02-18%20100805.png)
-*CSV export of WAN SLE classifier data for offline analysis*
-
-## Features
-
-- **Org-Wide SLE Dashboard**: View worst 100 sites across your entire organization
-  - WiFi, Wired, and WAN tabs for category-specific views
-  - Sortable by any SLE metric (Coverage, Capacity, Throughput, etc.)
-  - Direct links to drill down into specific site details
-  - Configurable time ranges (24h, 7 days, 2 weeks)
-- **Site Selection**: Browse and search through all sites in your Mist organization
-- **Device Health**: Real-time status of Access Points, Switches, and Gateways
-  - Connected/disconnected counts with visual indicators
-  - Device tables with model, IP, uptime, version, and firmware info
-  - Sortable columns for easy data analysis
-- **SLE Metrics**: WiFi, Wired, and WAN Service Level Experience scores
-  - Collapsible metric sections with average scores
-  - Configurable time ranges (5 min, 1 hour, today, 24 hours, 7 days)
-  - Color-coded thresholds (green/yellow/red)
-  - **Detailed SLE Pages**: Click "Details" to view classifier breakdowns
-    - Per-metric classifier analysis with impact events and duration
-    - Impact visualization bars for quick problem identification
-    - Dynamic tables that auto-discover API columns (future-proof)
-    - Responsive mobile design with fullscreen modals
-    - Export all classifier data to CSV
-- **Access Point Details**:
-  - Connected WiFi clients per AP
-  - Currently broadcasting SSIDs (resolved via device profiles)
-  - Click-through to client details page
-- **Gateway WAN Status**:
-  - WAN port status with IP, speed, and traffic stats
-  - VPN peer status with latency, jitter, loss, and MOS metrics
-  - BGP peer status with neighbor info and route counts
-  - Collapsible peer tables with percentage-up indicators
-- **Client Details Pages**:
-  - AP WiFi clients with signal strength, SSID, band, and data usage
-  - Switch wired clients with port, VLAN, and MAC info
-- **Dark Mode**: Modern dark theme with T-Mobile magenta accents, optimized for NOC environments
-- **CSV Export**: Download any table as CSV with one-click export buttons
-- **Container Ready**: Multi-architecture Docker/Podman support (amd64/arm64)
-
-## Quick Start
-
-### Using Docker/Podman with Environment File (Recommended)
-
-1. **Pull the container image:**
-
-   ```bash
-   docker pull ghcr.io/jmorrison-juniper/mistsitedashboard:latest
-   ```
-
-2. **Create a `.env` file** in your preferred directory (e.g., `~/mistsitedashboard/.env`):
-
-   ```bash
-   mkdir -p ~/mistsitedashboard
-   cat > ~/mistsitedashboard/.env << 'EOF'
-   MIST_APITOKEN=your_api_token_here
-   MIST_ORG_ID=your_org_id_here
-   MIST_HOST=api.mist.com
-   EOF
-   ```
-
-   > **Note:** For EU cloud, use `MIST_HOST=api.eu.mist.com`
-
-3. **Run the container:**
-
-   ```bash
-   docker run -d \
-     --name mistsitedashboard \
-     -p 5000:5000 \
-     --env-file ~/mistsitedashboard/.env \
-     ghcr.io/jmorrison-juniper/mistsitedashboard:latest
-   ```
-
-4. **Access the dashboard** at: `http://localhost:5000`
-
-### Using Inline Environment Variables
-
-```bash
-docker run -d \
-  --name mistsitedashboard \
-  -p 5000:5000 \
-  -e MIST_APITOKEN=your_api_token_here \
-  -e MIST_ORG_ID=your_org_id_here \
-  ghcr.io/jmorrison-juniper/mistsitedashboard:latest
-```
-
-### Docker Compose
-
-Create a `docker-compose.yml` file:
-
-```yaml
-services:
-  mistsitedashboard:
-    image: ghcr.io/jmorrison-juniper/mistsitedashboard:latest
-    container_name: mistsitedashboard
-    ports:
-      - "5000:5000"
-    env_file:
-      - .env
-    restart: unless-stopped
-```
-
-Create a `.env` file in the same directory:
-
-```env
-MIST_APITOKEN=your_api_token_here
-MIST_ORG_ID=your_org_id_here
-MIST_HOST=api.mist.com
-TZ=America/Chicago
-```
-
-Then run:
-
-```bash
-docker-compose up -d
-```
-
-Access at: `http://your-server-ip:5000`
-
-## Configuration
-
-| Variable       | Required | Default      | Description                          |
-| -------------- | -------- | ------------ | ------------------------------------ |
-| MIST_APITOKEN  | Yes      | -            | Your Mist API token                  |
-| MIST_ORG_ID    | No       | auto-detect  | Organization ID                      |
-| MIST_HOST      | No       | api.mist.com | API host (api.eu.mist.com for EU)    |
-| PORT           | No       | 5000         | Web interface port                   |
-| LOG_LEVEL      | No       | INFO         | DEBUG, INFO, WARNING, ERROR          |
-| TZ             | No       | UTC          | Container timezone                   |
-| PERF_MONITORING | No     | 1            | JSON performance events on `msd.perf` (`0` disables) |
-| PERF_TRACEMALLOC | No    | 0            | Include `peak_bytes` allocation samples when set to `1` |
-
-### Getting Your Mist API Token
-
-1. Log into the Mist dashboard at <https://manage.mist.com>
-2. Navigate to **Organization** > **Settings** > **API Token**
-3. Click **Create Token** and copy the token value
-
-### Finding Your Organization ID
-
-The Organization ID can be found in the Mist dashboard URL:
-
-```text
-https://manage.mist.com/admin/?org_id=YOUR_ORG_ID_HERE
-```
-
-Or leave it empty and the dashboard will auto-detect your first available organization.
-
-## Performance monitoring
-
-Performance monitoring is enabled by default. Each Flask route, Mist API client method, Mist HTTP response, and `get_site_health` stage emits one JSON log line on the `msd.perf` logger. Events use one schema with route, method, site ID, duration, network and processing time, call count, payload size, item count, status, cache hit, retry count, error class, peak bytes, and UTC timestamp. Query parameters are logged as keys only; API tokens, authorization headers, and full query strings are not logged.
-
-Set `PERF_MONITORING=0` to disable performance events. Set `PERF_TRACEMALLOC=1` to include peak allocation bytes for route and Mist API method events; this is off by default. `peak_bytes` is approximate, because tracemalloc is process-wide and overlapping or nested scopes reset the peak.
-
-Run the synthetic benchmark without Mist credentials:
-
-```bash
-python scripts/benchmark_routes.py --size small --iterations 10
-```
-
-## Running as a Python Script (No Container)
-
-If you prefer to run the dashboard directly without a container:
-
-### Quick Start (Script)
-
-```bash
-# Clone the repository
-git clone https://github.com/jmorrison-juniper/MistSiteDashboard.git
-cd MistSiteDashboard
-
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create your .env file
-cp .env.example .env
-```
-
-Edit the `.env` file with your credentials:
-
-```env
-MIST_APITOKEN=your_api_token_here
-MIST_ORG_ID=your_org_id_here
-MIST_HOST=api.mist.com
-```
-
-Run the application:
-
-```bash
-python app.py
-```
-
-Access at: `http://localhost:5000`
-
-> **Note:** The `.env` file is automatically loaded by the application. Keep it in the same directory as `app.py`.
-
-### Running in Background (Linux/macOS)
-
-```bash
-# Run in background with nohup
-nohup python app.py > dashboard.log 2>&1 &
-
-# Or use screen/tmux for persistent sessions
-screen -S mistsitedashboard
-python app.py
-# Press Ctrl+A, then D to detach
-```
-
-## Mist API Endpoints Used
-
-This dashboard uses the following endpoints from the [mistapi Python SDK](https://github.com/tmunzer/mistapi_python):
-
-### Organization & Sites
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/self` | Get current user info (for org detection) |
-| `GET /api/v1/orgs/:org_id` | Get organization details |
-| `GET /api/v1/orgs/:org_id/sites` | List all sites in organization |
-| `GET /api/v1/sites/:site_id` | Get single site info |
-| `GET /api/v1/orgs/:org_id/templates` | List WLAN templates (for SSID resolution) |
-| `GET /api/v1/orgs/:org_id/wlans` | List organization WLANs |
-
-### Device Statistics
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/sites/:site_id/stats/devices` | Get device statistics (APs, switches, gateways) |
-| `GET /api/v1/sites/:site_id/stats/devices?type=gateway` | Get gateway stats including WAN interface status (`if_stat`) |
-| `GET /api/v1/sites/:site_id/stats/wireless_clients` | Get wireless client statistics |
-
-### Client Data
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/sites/:site_id/clients/search` | Search wireless clients |
-| `GET /api/v1/sites/:site_id/clients/sessions/search` | Search wireless client sessions |
-| `GET /api/v1/sites/:site_id/wired_clients/search` | Search wired clients |
-
-### SLE Metrics & Classifiers
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metrics` | List available SLE metrics |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/summary` | Get SLE summary scores |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/classifiers` | List SLE metric classifiers |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/classifier/:classifier` | Get classifier details |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impact-summary` | Get SLE impact summary |
-
-### SLE Impacted Items
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/aps` | List impacted access points |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/gateways` | List impacted gateways |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/interfaces` | List impacted interfaces |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/apps` | List impacted applications |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/wired_clients` | List impacted wired clients |
-| `GET /api/v1/sites/:site_id/sle/:scope/:scope_id/metric/:metric/impacted/wireless_clients` | List impacted wireless clients |
-
-### Org-Wide Insights
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/v1/orgs/:org_id/insights/worst-sites-by-sle` | Org-wide worst sites by SLE metric |
-| `GET /api/v1/orgs/:org_id/stats/peer_paths/search` | Search VPN peer path stats |
-| `GET /api/v1/orgs/:org_id/stats/bgp_peers/search` | Search BGP peer stats |
-
-## Architecture
-
-```text
-MistSiteDashboard/
-├── app.py                 # Flask application & routes
-├── mist_connection.py     # Mist API client
-├── templates/
-│   ├── index.html         # Main dashboard UI
-│   ├── gateway_wan.html   # Gateway WAN status page
-│   ├── ap_clients.html    # AP WiFi clients page
-│   └── switch_clients.html # Switch wired clients page
-├── requirements.txt       # Python dependencies
-├── Dockerfile             # Container build
-├── docker-compose.yml     # Container orchestration
-└── .github/
-    └── workflows/
-        └── container-build.yml  # Image build for app changes and pull requests
-```
-
-The `container-build.yml` workflow calls the shared `reusable-container-image.yml` workflow in [misthelper-devtools](https://github.com/jmorrison-juniper/misthelper-devtools). The caller pins a devtools release commit, and a comment names the release tag. A push to `main` that changes the app pushes one image with the `main`, short SHA, `latest`, and `YY.MM.DD.HH.MM` tags. A pull request builds the image but does not push it. Dependabot keeps the actions and the devtools pins up to date.
-
-## Changelog
-
-```json
-{
-  "26.02.17": {
-    "feature-additions": [
-      "Dynamic table rendering for all SLE impact details",
-      "Auto-discovery of API response columns (future-proof)",
-      "Responsive tables with mobile optimization",
-      "Fullscreen modals on mobile devices (md-down)",
-      "Column priority ordering for better visibility"
-    ],
-    "improvements": [
-      "WiFi SLE: Dynamic Affected APs/Clients tables",
-      "WAN SLE: Dynamic Gateways/Interfaces/Applications/Clients tables",
-      "Wired SLE: Dynamic Switches/Chassis tables",
-      "CSV export adapts to any returned columns",
-      "Mobile-friendly column hiding for narrow screens"
-    ],
-    "removed": [
-      "Hardcoded render functions replaced with renderDynamicTable()"
-    ]
-  },
-  "26.02.13": {
-    "feature-additions": [
-      "Org-Wide Worst 100 Sites dashboard on main page",
-      "WiFi/Wired/WAN tabs for org-level SLE metrics",
-      "Sortable metric dropdowns for each SLE category",
-      "Site name links to drill down into specific sites",
-      "Duration selector (24h, 7d, 2w) for org SLE data",
-      "Color-coded SLE bars with percentage thresholds"
-    ],
-    "api-additions": [
-      "GET /api/org/sle/<type> - Org-wide SLE insights endpoint"
-    ],
-    "documentation": [
-      "Added Mist API OpenAPI 3.1 specs to docs/ folder"
-    ]
-  },
-  "24.12.17": {
-    "feature-additions": [
-      "Gateway WAN status page with port details",
-      "VPN peer status with latency, jitter, loss, MOS metrics",
-      "BGP peer status with neighbor info and route counts",
-      "Collapsible VPN/BGP tables with percentage-up indicators",
-      "AP WiFi clients detail page",
-      "Switch wired clients detail page",
-      "SSID display for APs (resolved via device profiles)",
-      "Collapsible SLE metric sections with averages",
-      "SLE time range selector (5min to 7 days)",
-      "Sortable device tables",
-      "Compact health summary cards"
-    ],
-    "fixes": [
-      "API pagination for large sites (100+ devices)",
-      "Invalid Date handling in timestamps",
-      "Improved font readability"
-    ]
-  },
-  "24.12.16": {
-    "feature-additions": [
-      "Initial release",
-      "Site selection with search/filter",
-      "Device health display (APs, Switches, Gateways)",
-      "SLE metrics (WiFi, Wired, WAN)",
-      "Device detail tables with status, uptime, version",
-      "Dark mode UI optimized for NOC environments"
-    ],
-    "container": [
-      "Multi-architecture support (amd64/arm64)",
-      "GitHub Container Registry publishing",
-      "Non-root container user for security"
-    ]
-  }
-}
-```
-
-## Related Projects
-
-- [MistHelper](https://github.com/jmorrison-juniper/MistHelper) - Comprehensive Mist API data export tool
-- [mistapi_python](https://github.com/tmunzer/mistapi_python) - Python SDK for Mist API (by Thomas Munzer)
-
-## License
-
-This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
-
----
-
-Made for Juniper Mist network operations.
+Built for network operations engineers working with Juniper Mist.
+Maintained by Joseph Morrison
+([@jmorrison-juniper](https://github.com/jmorrison-juniper)).
+See [related projects](docs/user-guide.md#related-projects).
+Licensed under [CC BY-NC-SA 4.0](LICENSE).
