@@ -80,12 +80,16 @@ name or free port range.
 
 Use the `documentation` label for documentation work and the `ci` label for workflow work. Use the
 `in-progress` label while an issue is active. The repository has no scope labels, pull request
-template, CodeQL workflow, or `auto-merge` label.
+template, or `auto-merge` label.
 
 The changelog is in `docs/user-guide.md`. Add a new entry with the `YY.MM.DD.HH.MM` UTC format.
 The container image uses that format for its version tag. The CI workflow runs the Python quality
 gates. The container workflow builds images for app changes and pull requests. The STE workflow
-checks `README.md`, `AGENTS.md`, and `.github/copilot-instructions.md`.
+checks `README.md`, `AGENTS.md`, and `.github/copilot-instructions.md`. The CodeQL workflow
+scans the Python code on each pull request, on each push to `main`, and each Monday.
+
+The required checks for a pull request into `main` include `CodeQL` and
+`codeql / Analyze (python)`. The CodeQL workflow does not cancel a `main` run.
 
 ## Known pitfalls
 
@@ -107,6 +111,8 @@ checks `README.md`, `AGENTS.md`, and `.github/copilot-instructions.md`.
 | `docs/user-guide.md` | User guide and changelog |
 | `.github/workflows/ci.yml` | Shared Python quality gates |
 | `.github/workflows/container-build.yml` | Container image workflow |
+| `.github/workflows/codeql.yml` | CodeQL analysis of the Python code |
+| `.github/codeql/codeql-config.yml` | CodeQL configuration |
 
 ## External resources
 
