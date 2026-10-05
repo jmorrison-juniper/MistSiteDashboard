@@ -17,6 +17,8 @@ jobs:
     with:
       python-version: '3.13'
       cache-dependency-path: requirements*.txt
+      # Keep the Radon pin here until development requirements include it.
+      install: python -m pip install -r requirements-dev.txt radon==6.0.1
       ruff: true
       black: true
       mypy: true
@@ -24,6 +26,9 @@ jobs:
       bandit: true
       pip-audit: true
       vulture: true
+      radon: true
+      radon-args: .
+      radon-max: 15
 
   quality_gate_issues:
     name: "Sync quality-gate issues"

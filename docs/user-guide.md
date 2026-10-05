@@ -373,6 +373,9 @@ The `container-build.yml` workflow calls the shared `reusable-container-image.ym
 
 ### version 26.10.05.01.30
 
+- Split complex Mist API data-processing paths into typed class helpers, added
+  47 mocked regression and edge-case tests, and enabled the repository-wide
+  Radon maximum-15 complexity gate.
 - Restricted the landing README to What, How, Where, When, Why and Who; preserved
   the complete user guide here with corrected screenshot links.
 - Added a loopback-only synthetic dashboard demo and reproducible, genuine

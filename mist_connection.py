@@ -420,15 +420,7 @@ class MistConnection:
 
                 # Build template_id -> deviceprofile_ids mapping
                 # Templates define which device profiles should receive which configs
-                template_to_deviceprofiles: dict[str, list[str]] = {}
-                for template in templates:
-                    if isinstance(template, dict):
-                        template_id = template.get("id", "")
-                        dp_ids = template.get("deviceprofile_ids", [])
-                        filter_by_dp = template.get("filter_by_deviceprofile", False)
-                        # Only include if template is filtered by device profile
-                        if template_id and dp_ids and filter_by_dp:
-                            template_to_deviceprofiles[template_id] = dp_ids
+                template_to_deviceprofiles = self._template_profiles(templates)
 
                 # Fetch org WLANs to map SSIDs to device profiles
                 with stage(
@@ -448,25 +440,9 @@ class MistConnection:
                     org_wlans = wlans_data if isinstance(wlans_data, list) else []
 
                     # Build deviceprofile_id -> SSIDs mapping
-                    for wlan in org_wlans:
-                        if not isinstance(wlan, dict):
-                            continue
-                        # Skip disabled WLANs
-                        if not wlan.get("enabled", True):
-                            continue
-                        ssid = wlan.get("ssid", "")
-                        template_id = wlan.get("template_id", "")
-                        if not ssid:
-                            continue
-
-                        # If WLAN has a template_id, map it to device profiles via template
-                        if template_id and template_id in template_to_deviceprofiles:
-                            for dp_id in template_to_deviceprofiles[template_id]:
-                                if dp_id not in deviceprofile_ssids:
-                                    deviceprofile_ssids[dp_id] = []
-                                # Avoid duplicate SSIDs in the list
-                                if ssid not in deviceprofile_ssids[dp_id]:
-                                    deviceprofile_ssids[dp_id].append(ssid)
+                    self._map_profile_wlans(
+                        org_wlans, template_to_deviceprofiles, deviceprofile_ssids
+                    )
 
                     logger.debug(
                         f"Built SSID mapping for {len(deviceprofile_ssids)} device profiles"
@@ -548,28 +524,10 @@ class MistConnection:
                     # ---------------------------------------------------------
                     # AP-specific fields
                     # ---------------------------------------------------------
-                    device_summary["num_clients"] = device.get("num_clients", 0) or 0
-                    device_summary["power_src"] = device.get("power_src", "")
-                    device_summary["power_opmode"] = device.get("power_opmode", "")
-
-                    # Get port speed from port_stat (eth0 is the uplink port)
-                    port_stat = device.get("port_stat", {})
-                    eth0_stat = port_stat.get("eth0", {})
-                    device_summary["port_speed"] = eth0_stat.get("speed", 0)
-
-                    # Resolve SSIDs for this AP based on its device profile
-                    # Uses the deviceprofile_id -> SSIDs mapping built from templates
-                    ap_deviceprofile_id = device.get("deviceprofile_id", "")
-                    ap_ssids: list[str] = deviceprofile_ssids.get(
-                        ap_deviceprofile_id, []
-                    )
-                    device_summary["ssids"] = ap_ssids.copy() if ap_ssids else []
+                    self._add_ap_health(device, device_summary, deviceprofile_ssids)
 
                     # Update AP counters
-                    health_data["aps"]["total"] += 1
-                    health_data["aps"][
-                        "connected" if is_connected else "disconnected"
-                    ] += 1
+                    self._increment_health(health_data["aps"], is_connected)
                     health_data["aps"]["devices"].append(device_summary)
 
                 elif device_type == "switch":
@@ -577,42 +535,21 @@ class MistConnection:
                     # Switch-specific fields
                     # ---------------------------------------------------------
                     # Client stats are nested under clients_stats.total
-                    clients_stats = device.get("clients_stats", {}).get("total", {})
-                    device_summary["num_wired_clients"] = (
-                        clients_stats.get("num_wired_clients", 0) or 0
-                    )
-                    device_summary["num_wifi_clients"] = (
-                        clients_stats.get("num_wifi_clients", 0) or 0
-                    )
-
-                    # num_aps comes as a list, get the first value
-                    num_aps = clients_stats.get("num_aps", [0])
-                    device_summary["num_aps"] = (
-                        num_aps[0] if isinstance(num_aps, list) and num_aps else 0
-                    )
+                    self._add_switch_health(device, device_summary)
 
                     # Update switch counters
-                    health_data["switches"]["total"] += 1
-                    health_data["switches"][
-                        "connected" if is_connected else "disconnected"
-                    ] += 1
+                    self._increment_health(health_data["switches"], is_connected)
                     health_data["switches"]["devices"].append(device_summary)
 
                 elif device_type == "gateway":
                     # ---------------------------------------------------------
                     # Gateway-specific fields (basic info only, WAN details separate)
                     # ---------------------------------------------------------
-                    health_data["gateways"]["total"] += 1
-                    health_data["gateways"][
-                        "connected" if is_connected else "disconnected"
-                    ] += 1
+                    self._increment_health(health_data["gateways"], is_connected)
                     health_data["gateways"]["devices"].append(device_summary)
 
-                # Update overall summary counters
-                health_data["summary"]["total"] += 1
-                health_data["summary"][
-                    "connected" if is_connected else "disconnected"
-                ] += 1
+                # Unknown device types still contribute to the overall summary.
+                self._increment_health(health_data["summary"], is_connected)
             emit_perf_event(
                 event_name="mist_api_stage",
                 module=__name__,
@@ -646,6 +583,68 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching site health for {site_id}: {error}")
             raise
+
+    @staticmethod
+    def _template_profiles(templates: list[Any]) -> dict[str, list[str]]:
+        profiles = {}
+        for template in templates:
+            if not isinstance(template, dict):
+                continue
+            template_id = template.get("id", "")
+            profile_ids = template.get("deviceprofile_ids", [])
+            if (
+                template_id
+                and profile_ids
+                and template.get("filter_by_deviceprofile", False)
+            ):
+                profiles[template_id] = profile_ids
+        return profiles
+
+    @staticmethod
+    def _map_profile_wlans(
+        wlans: list[Any],
+        templates: dict[str, list[str]],
+        profiles: dict[str, list[str]],
+    ) -> None:
+        for wlan in wlans:
+            if not isinstance(wlan, dict) or not wlan.get("enabled", True):
+                continue
+            ssid = wlan.get("ssid", "")
+            template_id = wlan.get("template_id", "")
+            if not ssid or not template_id or template_id not in templates:
+                continue
+            for profile_id in templates[template_id]:
+                ssids = profiles.setdefault(profile_id, [])
+                if ssid not in ssids:
+                    ssids.append(ssid)
+
+    @staticmethod
+    def _first_list_item(items: Any, default: Any) -> Any:
+        return items[0] if isinstance(items, list) and items else default
+
+    @staticmethod
+    def _increment_health(counts: NestedRecord, connected: bool) -> None:
+        counts["total"] += 1
+        counts["connected" if connected else "disconnected"] += 1
+
+    @staticmethod
+    def _add_ap_health(
+        device: NestedRecord, summary: NestedRecord, profiles: dict[str, list[str]]
+    ) -> None:
+        summary["num_clients"] = device.get("num_clients", 0) or 0
+        summary["power_src"] = device.get("power_src", "")
+        summary["power_opmode"] = device.get("power_opmode", "")
+        summary["port_speed"] = (
+            device.get("port_stat", {}).get("eth0", {}).get("speed", 0)
+        )
+        ssids = profiles.get(device.get("deviceprofile_id", ""), [])
+        summary["ssids"] = ssids.copy() if ssids else []
+
+    def _add_switch_health(self, device: NestedRecord, summary: NestedRecord) -> None:
+        clients = device.get("clients_stats", {}).get("total", {})
+        summary["num_wired_clients"] = clients.get("num_wired_clients", 0) or 0
+        summary["num_wifi_clients"] = clients.get("num_wifi_clients", 0) or 0
+        summary["num_aps"] = self._first_list_item(clients.get("num_aps", [0]), 0)
 
     # =========================================================================
     # SLE (SERVICE LEVEL EXPERIENCE) METHODS
@@ -761,13 +760,7 @@ class MistConnection:
             # -----------------------------------------------------------------
             for metric in enabled_metrics:
                 # Determine which category this metric belongs to
-                category = None
-                for cat, cat_metrics in metric_categories.items():
-                    if metric in cat_metrics or any(
-                        metric.startswith(m) for m in cat_metrics
-                    ):
-                        category = cat
-                        break
+                category = self._metric_category(metric, metric_categories)
 
                 # Skip metrics that don't belong to any category
                 if not category:
@@ -816,35 +809,9 @@ class MistConnection:
                     # ---------------------------------------------------------
                     # Formula: SLE % = ((total - degraded) / total) * 100
                     # The API returns arrays of sample values that need to be summed
-                    if isinstance(summary_data, dict) and "sle" in summary_data:
-                        sle_info = summary_data.get("sle", {})
-                        samples = sle_info.get("samples", {})
-                        total_samples = samples.get("total", [])
-                        degraded_samples = samples.get("degraded", [])
-
-                        # Sum up totals and degraded values (filter out None values)
-                        total_sum = sum([x for x in total_samples if x is not None])
-                        degraded_sum = sum(
-                            [x for x in degraded_samples if x is not None]
-                        )
-
-                        # Only record metrics with actual data
-                        if total_sum > 0:
-                            sle_value = ((total_sum - degraded_sum) / total_sum) * 100
-                            sle_data[category]["available"] = True
-
-                            # Clean up metric name for display (remove version suffixes)
-                            display_name = (
-                                metric.replace("-v2", "")
-                                .replace("-v4", "")
-                                .replace("-new", "")
-                            )
-
-                            # Avoid duplicates (e.g., switch-health and switch-health-v2)
-                            if display_name not in sle_data[category]["metrics"]:
-                                sle_data[category]["metrics"][display_name] = round(
-                                    sle_value, 1
-                                )
+                    sle_value = self._sle_value(summary_data)
+                    if sle_value is not None:
+                        self._record_sle_value(sle_data[category], metric, sle_value)
 
                 except Exception as metric_error:
                     logger.debug(
@@ -856,6 +823,34 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching site SLE for {site_id}: {error}")
             raise
+
+    @staticmethod
+    def _sum_samples(samples: list[Any]) -> float:
+        return sum(value for value in samples if value is not None)
+
+    def _sle_value(self, data: Any) -> float | None:
+        if not isinstance(data, dict) or "sle" not in data:
+            return None
+        samples = data.get("sle", {}).get("samples", {})
+        total = self._sum_samples(samples.get("total", []))
+        degraded = self._sum_samples(samples.get("degraded", []))
+        if total > 0:
+            return round(((total - degraded) / total) * 100, 1)
+        return None
+
+    @staticmethod
+    def _record_sle_value(category: NestedRecord, metric: str, value: float) -> None:
+        category["available"] = True
+        name = metric.replace("-v2", "").replace("-v4", "").replace("-new", "")
+        if name not in category["metrics"]:
+            category["metrics"][name] = value
+
+    @staticmethod
+    def _metric_category(metric: str, categories: dict[str, list[str]]) -> str | None:
+        for category, metrics in categories.items():
+            if metric in metrics or any(metric.startswith(name) for name in metrics):
+                return category
+        return None
 
     def get_sle_classifiers(
         self, site_id: str, metric: str, scope: str = "site"
@@ -1239,12 +1234,9 @@ class MistConnection:
             # -----------------------------------------------------------------
             # Filter to only metrics in this category that are enabled
             # -----------------------------------------------------------------
-            category_metrics = [
-                m
-                for m in metric_categories[category]
-                if m in enabled_metrics
-                or any(em.startswith(m) for em in enabled_metrics)
-            ]
+            category_metrics = self._enabled_category_metrics(
+                metric_categories[category], enabled_metrics
+            )
 
             result: dict[str, Any] = {
                 "category": category,
@@ -1254,11 +1246,7 @@ class MistConnection:
 
             for metric in category_metrics:
                 # Find actual metric name (might have version suffix like -v2)
-                actual_metric = metric
-                for em in enabled_metrics:
-                    if em.startswith(metric):
-                        actual_metric = em
-                        break
+                actual_metric = self._actual_metric(metric, enabled_metrics)
 
                 metric_data: dict[str, Any] = {
                     "name": metric,
@@ -1301,14 +1289,7 @@ class MistConnection:
                             if hasattr(impact_response, "data")
                             else impact_response
                         )
-                        if isinstance(impact_data, dict):
-                            for clf in impact_data.get("classifiers", []):
-                                if (
-                                    isinstance(clf, dict)
-                                    and "name" in clf
-                                    and "impact" in clf
-                                ):
-                                    classifier_impact_map[clf["name"]] = clf["impact"]
+                        classifier_impact_map = self._classifier_impact_map(impact_data)
                     except Exception as e:
                         logger.debug(
                             f"Could not get impact data from deprecated API for {actual_metric}: {e}"
@@ -1316,20 +1297,7 @@ class MistConnection:
 
                     if isinstance(summary_data, dict):
                         # Extract overall SLE value
-                        if "sle" in summary_data:
-                            sle_info = summary_data.get("sle", {})
-                            samples = sle_info.get("samples", {})
-                            total = sum(
-                                x for x in samples.get("total", []) if x is not None
-                            )
-                            degraded = sum(
-                                x for x in samples.get("degraded", []) if x is not None
-                            )
-
-                            if total > 0:
-                                metric_data["sle_value"] = round(
-                                    ((total - degraded) / total) * 100, 1
-                                )
+                        metric_data["sle_value"] = self._sle_value(summary_data)
 
                         # Extract overall impact
                         metric_data["impact"] = summary_data.get("impact", {})
@@ -1338,77 +1306,19 @@ class MistConnection:
                         raw_classifiers = summary_data.get("classifiers", [])
 
                         # Calculate total degraded across all classifiers for percentage calc
-                        total_classifier_degraded = 0
-                        for clf in raw_classifiers:
-                            if isinstance(clf, dict):
-                                clf_samples = clf.get("samples", {})
-                                clf_degraded = clf_samples.get("degraded", [])
-                                total_classifier_degraded += sum(
-                                    x for x in clf_degraded if x is not None
-                                )
+                        total_classifier_degraded = self._total_classifier_degraded(
+                            raw_classifiers
+                        )
 
                         # Process each classifier
                         for clf in raw_classifiers:
                             if isinstance(clf, dict):
-                                clf_name = clf.get("name", "unknown")
-                                clf_samples = clf.get("samples", {})
-                                # Get impact from the deprecated API's classifier data
-                                clf_impact = classifier_impact_map.get(clf_name, {})
-
-                                # Calculate degraded sum for this classifier
-                                degraded_values = clf_samples.get("degraded", [])
-                                clf_degraded_sum = sum(
-                                    x for x in degraded_values if x is not None
+                                self._append_sle_classifier(
+                                    clf,
+                                    classifier_impact_map,
+                                    total_classifier_degraded,
+                                    metric_data["classifiers"],
                                 )
-
-                                # Calculate percentage of total degradation
-                                percentage = 0
-                                if total_classifier_degraded > 0:
-                                    percentage = round(
-                                        (clf_degraded_sum / total_classifier_degraded)
-                                        * 100,
-                                        1,
-                                    )
-
-                                # Build impact dict with all available fields
-                                # WiFi uses: num_aps, total_aps, num_users, total_users
-                                # WAN uses: num_gateways, total_gateways, num_users, total_users
-                                # Wired uses: num_switches, total_switches
-                                classifier_info = {
-                                    "name": clf_name,
-                                    "degraded_sum": clf_degraded_sum,
-                                    "percentage": percentage,
-                                    "impact": {
-                                        "num_aps": clf_impact.get("num_aps", 0) or 0,
-                                        "total_aps": clf_impact.get("total_aps", 0)
-                                        or 0,
-                                        "num_gateways": clf_impact.get(
-                                            "num_gateways", 0
-                                        )
-                                        or 0,
-                                        "total_gateways": clf_impact.get(
-                                            "total_gateways", 0
-                                        )
-                                        or 0,
-                                        "num_switches": clf_impact.get(
-                                            "num_switches", 0
-                                        )
-                                        or 0,
-                                        "total_switches": clf_impact.get(
-                                            "total_switches", 0
-                                        )
-                                        or 0,
-                                        "num_users": clf_impact.get("num_users", 0)
-                                        or 0,
-                                        "total_users": clf_impact.get("total_users", 0)
-                                        or 0,
-                                    },
-                                    "samples": clf_samples,
-                                }
-
-                                # Only include classifiers with actual degradation
-                                if clf_degraded_sum > 0:
-                                    metric_data["classifiers"].append(classifier_info)
 
                         # Sort classifiers by percentage (highest first)
                         metric_data["classifiers"].sort(
@@ -1425,6 +1335,78 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching SLE details for {category}: {error}")
             raise
+
+    @staticmethod
+    def _classifier_impact_map(data: Any) -> dict[str, NestedRecord]:
+        impacts = {}
+        if isinstance(data, dict):
+            for classifier in data.get("classifiers", []):
+                if (
+                    isinstance(classifier, dict)
+                    and "name" in classifier
+                    and "impact" in classifier
+                ):
+                    impacts[classifier["name"]] = classifier["impact"]
+        return impacts
+
+    @staticmethod
+    def _enabled_category_metrics(metrics: list[str], enabled: list[str]) -> list[str]:
+        return [
+            metric
+            for metric in metrics
+            if metric in enabled or any(name.startswith(metric) for name in enabled)
+        ]
+
+    @staticmethod
+    def _actual_metric(metric: str, enabled: list[str]) -> str:
+        for name in enabled:
+            if name.startswith(metric):
+                return name
+        return metric
+
+    def _total_classifier_degraded(self, classifiers: list[Any]) -> float:
+        total: float = 0
+        for classifier in classifiers:
+            if isinstance(classifier, dict):
+                total += self._sum_samples(
+                    classifier.get("samples", {}).get("degraded", [])
+                )
+        return total
+
+    @staticmethod
+    def _normalized_classifier_impact(impact: NestedRecord) -> NestedRecord:
+        keys = (
+            "num_aps",
+            "total_aps",
+            "num_gateways",
+            "total_gateways",
+            "num_switches",
+            "total_switches",
+            "num_users",
+            "total_users",
+        )
+        return {key: impact.get(key, 0) or 0 for key in keys}
+
+    def _append_sle_classifier(
+        self,
+        classifier: NestedRecord,
+        impacts: dict[str, NestedRecord],
+        total: float,
+        classifiers: list[NestedRecord],
+    ) -> None:
+        name = classifier.get("name", "unknown")
+        samples = classifier.get("samples", {})
+        degraded = self._sum_samples(samples.get("degraded", []))
+        percentage = round((degraded / total) * 100, 1) if total > 0 else 0
+        info = {
+            "name": name,
+            "degraded_sum": degraded,
+            "percentage": percentage,
+            "impact": self._normalized_classifier_impact(impacts.get(name, {})),
+            "samples": samples,
+        }
+        if degraded > 0:
+            classifiers.append(info)
 
     def get_classifier_impact_details(
         self, site_id: str, metric: str, classifier: str, duration: str = "1d"
@@ -1513,66 +1495,22 @@ class MistConnection:
             # -----------------------------------------------------------------
             # Process APs - extract only those with actual degradation
             # -----------------------------------------------------------------
-            aps = []
-            for ap in data.get("ap", []):
-                if ap.get("degraded", 0) > 0:
-                    aps.append(
-                        {
-                            "mac": ap.get("ap_mac", ""),
-                            "name": ap.get("name", ap.get("ap_mac", "Unknown")),
-                            "degraded": ap.get("degraded", 0),
-                            "total": ap.get("total", 0),
-                        }
-                    )
-            aps.sort(key=lambda x: x["degraded"], reverse=True)
+            aps = self._client_impact_records(data, "ap")
 
             # -----------------------------------------------------------------
             # Process WLANs - extract only those with actual degradation
             # -----------------------------------------------------------------
-            wlans = []
-            for wlan in data.get("wlan", []):
-                if wlan.get("degraded", 0) > 0:
-                    wlans.append(
-                        {
-                            "id": wlan.get("wlan_id", ""),
-                            "name": wlan.get("name", "Unknown"),
-                            "degraded": wlan.get("degraded", 0),
-                            "total": wlan.get("total", 0),
-                        }
-                    )
-            wlans.sort(key=lambda x: x["degraded"], reverse=True)
+            wlans = self._client_impact_records(data, "wlan")
 
             # -----------------------------------------------------------------
             # Process device types (laptop, phone, tablet, etc.)
             # -----------------------------------------------------------------
-            device_types = []
-            for dt in data.get("device_type", []):
-                if dt.get("degraded", 0) > 0:
-                    device_types.append(
-                        {
-                            "type": dt.get("device_type", dt.get("name", "Unknown")),
-                            "name": dt.get("name", "Unknown"),
-                            "degraded": dt.get("degraded", 0),
-                            "total": dt.get("total", 0),
-                        }
-                    )
-            device_types.sort(key=lambda x: x["degraded"], reverse=True)
+            device_types = self._client_impact_records(data, "device_type")
 
             # -----------------------------------------------------------------
             # Process device operating systems
             # -----------------------------------------------------------------
-            device_os = []
-            for dos in data.get("device_os", []):
-                if dos.get("degraded", 0) > 0:
-                    device_os.append(
-                        {
-                            "os": dos.get("device_os", dos.get("name", "Unknown")),
-                            "name": dos.get("name", "Unknown"),
-                            "degraded": dos.get("degraded", 0),
-                            "total": dos.get("total", 0),
-                        }
-                    )
-            device_os.sort(key=lambda x: x["degraded"], reverse=True)
+            device_os = self._client_impact_records(data, "device_os")
 
             # -----------------------------------------------------------------
             # Process WiFi bands with human-readable names
@@ -1582,12 +1520,7 @@ class MistConnection:
                 if band.get("degraded", 0) > 0:
                     # Convert band identifiers to human-readable format
                     band_name = band.get("band", band.get("name", "Unknown"))
-                    if band_name == "24":
-                        band_name = "2.4 GHz"
-                    elif band_name == "5":
-                        band_name = "5 GHz"
-                    elif band_name == "6":
-                        band_name = "6 GHz"
+                    band_name = self._band_name(band_name)
                     bands.append(
                         {
                             "band": band_name,
@@ -1643,11 +1576,7 @@ class MistConnection:
 
             # Log raw data keys for debugging wired SLEs
             if metric.startswith("switch-"):
-                logger.info(f"Wired impact data keys: {list(data.keys())}")
-                if data.get("switch"):
-                    logger.info(f"Found {len(data['switch'])} switches in impact data")
-                if data.get("chassis"):
-                    logger.info(f"Found {len(data['chassis'])} chassis in impact data")
+                self._log_wired_impact(data)
 
             return {
                 "metric": metric,
@@ -1676,6 +1605,54 @@ class MistConnection:
     # =========================================================================
     # DEVICE AND CLIENT METHODS
     # =========================================================================
+
+    def _client_impact_records(
+        self, data: NestedRecord, kind: str
+    ) -> list[NestedRecord]:
+        records = []
+        for item in data.get(kind, []):
+            if item.get("degraded", 0) > 0:
+                record = self._client_impact_identity(item, kind)
+                record.update(
+                    degraded=item.get("degraded", 0), total=item.get("total", 0)
+                )
+                records.append(record)
+        records.sort(key=lambda item: item["degraded"], reverse=True)
+        return records
+
+    @staticmethod
+    def _client_impact_identity(item: NestedRecord, kind: str) -> NestedRecord:
+        if kind == "ap":
+            return {
+                "mac": item.get("ap_mac", ""),
+                "name": item.get("name", item.get("ap_mac", "Unknown")),
+            }
+        if kind == "wlan":
+            return {"id": item.get("wlan_id", ""), "name": item.get("name", "Unknown")}
+        output_key = {"device_type": "type", "device_os": "os"}[kind]
+        return {
+            output_key: item.get(kind, item.get("name", "Unknown")),
+            "name": item.get("name", "Unknown"),
+        }
+
+    @staticmethod
+    def _band_name(name: Any) -> Any:
+        # Do not coerce numeric or unknown identifiers: preserve the API value.
+        if name == "24":
+            return "2.4 GHz"
+        if name == "5":
+            return "5 GHz"
+        if name == "6":
+            return "6 GHz"
+        return name
+
+    @staticmethod
+    def _log_wired_impact(data: NestedRecord) -> None:
+        logger.info(f"Wired impact data keys: {list(data.keys())}")
+        if data.get("switch"):
+            logger.info(f"Found {len(data['switch'])} switches in impact data")
+        if data.get("chassis"):
+            logger.info(f"Found {len(data['chassis'])} chassis in impact data")
 
     def get_site_devices(
         self, site_id: str, device_type: str = "all"
@@ -1769,7 +1746,7 @@ class MistConnection:
         """
         try:
             session = self._get_session()
-            clients_by_mac = {}
+            clients_by_mac: dict[str, NestedRecord] = {}
 
             # -----------------------------------------------------------------
             # Source 1: Real-time connected clients with detailed stats
@@ -1784,25 +1761,7 @@ class MistConnection:
                     mistapi.get_all(response=stats_response, mist_session=session) or []
                 )
 
-                for client in stats_results:
-                    mac = client.get("mac", "")
-                    if mac:
-                        clients_by_mac[mac] = {
-                            "mac": mac,
-                            "hostname": client.get("hostname", ""),
-                            "ip": client.get("ip", ""),
-                            "username": client.get("username", ""),
-                            "ssid": client.get("ssid", ""),
-                            "ap": client.get("ap_mac", ""),
-                            "band": client.get("band", ""),
-                            "os": client.get("os", ""),
-                            "manufacture": client.get("manufacture", ""),
-                            "last_seen": client.get("last_seen", 0),
-                            "assoc_time": client.get("assoc_time", 0),
-                            "uptime": client.get("uptime", 0),
-                            "rssi": client.get("rssi", 0),
-                            "is_connected": True,
-                        }
+                self._store_wireless_stats(clients_by_mac, stats_results)
             except Exception as e:
                 logger.debug(f"Could not fetch wireless client stats: {e}")
 
@@ -1826,21 +1785,7 @@ class MistConnection:
                         if mac in clients_by_mac:
                             # Merge with existing data - prefer non-empty values
                             existing = clients_by_mac[mac]
-                            existing["hostname"] = existing.get(
-                                "hostname"
-                            ) or client.get("last_hostname", "")
-                            existing["ip"] = existing.get("ip") or client.get(
-                                "last_ip", ""
-                            )
-                            existing["username"] = existing.get(
-                                "username"
-                            ) or client.get("last_username", "")
-                            existing["os"] = existing.get("os") or client.get(
-                                "last_os", ""
-                            )
-                            existing["ssid"] = existing.get("ssid") or client.get(
-                                "last_ssid", ""
-                            )
+                            self._merge_wireless_search(existing, client)
                         else:
                             # New client not seen in stats (likely disconnected)
                             clients_by_mac[mac] = {
@@ -1885,20 +1830,7 @@ class MistConnection:
                         if mac in clients_by_mac:
                             # Update with session data if more recent or has more info
                             existing = clients_by_mac[mac]
-                            disconnect = sess.get("disconnect", 0)
-                            if disconnect > existing.get("last_seen", 0):
-                                existing["last_seen"] = disconnect
-                            existing["connect"] = existing.get("connect") or sess.get(
-                                "connect", 0
-                            )
-                            existing["disconnect"] = sess.get("disconnect", 0)
-                            existing["duration"] = sess.get("duration", 0)
-                            existing["ssid"] = existing.get("ssid") or sess.get(
-                                "ssid", ""
-                            )
-                            existing["manufacture"] = existing.get(
-                                "manufacture"
-                            ) or sess.get("client_manufacture", "")
+                            self._merge_wireless_session(existing, sess)
                         else:
                             # Client only found in session history
                             clients_by_mac[mac] = {
@@ -1928,6 +1860,48 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching wireless clients for site {site_id}: {error}")
             raise
+
+    @staticmethod
+    def _merge_wireless_search(existing: NestedRecord, client: NestedRecord) -> None:
+        for field in ("hostname", "ip", "username", "os", "ssid"):
+            existing[field] = existing.get(field) or client.get(f"last_{field}", "")
+
+    @staticmethod
+    def _merge_wireless_session(existing: NestedRecord, session: NestedRecord) -> None:
+        disconnect = session.get("disconnect", 0)
+        if disconnect > existing.get("last_seen", 0):
+            existing["last_seen"] = disconnect
+        existing["connect"] = existing.get("connect") or session.get("connect", 0)
+        existing["disconnect"] = disconnect
+        existing["duration"] = session.get("duration", 0)
+        existing["ssid"] = existing.get("ssid") or session.get("ssid", "")
+        existing["manufacture"] = existing.get("manufacture") or session.get(
+            "client_manufacture", ""
+        )
+
+    @staticmethod
+    def _store_wireless_stats(
+        clients: dict[str, NestedRecord], records: list[NestedRecord]
+    ) -> None:
+        for client in records:
+            mac = client.get("mac", "")
+            if mac:
+                clients[mac] = {
+                    "mac": mac,
+                    "hostname": client.get("hostname", ""),
+                    "ip": client.get("ip", ""),
+                    "username": client.get("username", ""),
+                    "ssid": client.get("ssid", ""),
+                    "ap": client.get("ap_mac", ""),
+                    "band": client.get("band", ""),
+                    "os": client.get("os", ""),
+                    "manufacture": client.get("manufacture", ""),
+                    "last_seen": client.get("last_seen", 0),
+                    "assoc_time": client.get("assoc_time", 0),
+                    "uptime": client.get("uptime", 0),
+                    "rssi": client.get("rssi", 0),
+                    "is_connected": True,
+                }
 
     def get_wired_clients(self, site_id: str) -> list[dict[str, Any]]:
         """
@@ -1985,49 +1959,18 @@ class MistConnection:
                     mac = client.get("mac", "")
                     if mac:
                         # Extract port info from device_mac_port array
-                        device_mac_port = client.get("device_mac_port", [])
-                        ip_list = client.get("ip", [])
-                        port_info = {}
-
-                        if (
-                            device_mac_port
-                            and isinstance(device_mac_port, list)
-                            and len(device_mac_port) > 0
-                        ):
-                            port_info = (
-                                device_mac_port[0]
-                                if isinstance(device_mac_port[0], dict)
-                                else {}
-                            )
+                        port_info = self._wired_port_info(client)
 
                         # ---------------------------------------------------------
                         # Extract best available IP address
                         # ---------------------------------------------------------
-                        ip = ""
-                        if isinstance(ip_list, list) and ip_list:
-                            ip = ip_list[0]
-                        elif isinstance(ip_list, str):
-                            ip = ip_list
-                        elif port_info.get("ip"):
-                            ip = port_info.get("ip", "")
+                        ip = self._wired_ip(client.get("ip", []), port_info)
 
                         # ---------------------------------------------------------
                         # Parse timestamps for connection timing
                         # ---------------------------------------------------------
-                        timestamp = client.get("timestamp", 0)
-                        port_start = port_info.get("start", 0)
-
-                        # Ensure timestamps are valid integers (API may return strings)
-                        if isinstance(timestamp, str):
-                            try:
-                                timestamp = int(float(timestamp)) if timestamp else 0
-                            except (ValueError, TypeError):
-                                timestamp = 0
-                        if isinstance(port_start, str):
-                            try:
-                                port_start = int(float(port_start)) if port_start else 0
-                            except (ValueError, TypeError):
-                                port_start = 0
+                        timestamp = self._wired_timestamp(client.get("timestamp", 0))
+                        port_start = self._wired_timestamp(port_info.get("start", 0))
 
                         # ---------------------------------------------------------
                         # Determine connection status
@@ -2072,6 +2015,29 @@ class MistConnection:
         except Exception as error:
             logger.error(f"Error fetching wired clients for site {site_id}: {error}")
             raise
+
+    def _wired_port_info(self, client: NestedRecord) -> NestedRecord:
+        port = self._first_list_item(client.get("device_mac_port", []), {})
+        return port if isinstance(port, dict) else {}
+
+    @staticmethod
+    def _wired_ip(addresses: Any, port: NestedRecord) -> Any:
+        if isinstance(addresses, list) and addresses:
+            return addresses[0]
+        if isinstance(addresses, str):
+            return addresses
+        if port.get("ip"):
+            return port.get("ip", "")
+        return ""
+
+    @staticmethod
+    def _wired_timestamp(value: Any) -> Any:
+        if isinstance(value, str):
+            try:
+                return int(float(value)) if value else 0
+            except (ValueError, TypeError):
+                return 0
+        return value
 
     def get_gateway_wan_status(self, site_id: str) -> list[dict[str, Any]]:
         """
@@ -2152,34 +2118,7 @@ class MistConnection:
                 # Only include ports where port_usage == "wan" or wan_type is set
                 if_stat = gw.get("if_stat", {})
 
-                for port_name, port_stats in if_stat.items():
-                    if isinstance(port_stats, dict):
-                        port_usage = port_stats.get("port_usage", "")
-                        wan_type = port_stats.get("wan_type", "")
-
-                        # Filter to WAN ports only
-                        if port_usage == "wan" or wan_type:
-                            # Get IP from ips array (first IP)
-                            ips = port_stats.get("ips", [])
-                            ip_str = ips[0] if isinstance(ips, list) and ips else ""
-
-                            wan_port = {
-                                "name": port_name,
-                                "wan_name": port_stats.get("wan_name", port_name),
-                                "status": (
-                                    "up" if port_stats.get("up", False) else "down"
-                                ),
-                                "ip": ip_str,
-                                "wan_type": wan_type or "ethernet",
-                                "address_mode": port_stats.get("address_mode", ""),
-                                "vlan": port_stats.get("vlan", 0),
-                                "port_id": port_stats.get("port_id", ""),
-                                "rx_bytes": port_stats.get("rx_bytes", 0),
-                                "tx_bytes": port_stats.get("tx_bytes", 0),
-                                "rx_pkts": port_stats.get("rx_pkts", 0),
-                                "tx_pkts": port_stats.get("tx_pkts", 0),
-                            }
-                            gw_info["wan_ports"].append(wan_port)
+                gw_info["wan_ports"] = self._gateway_wan_ports(if_stat)
 
                 # -------------------------------------------------------------
                 # Fetch VPN peers for this gateway
@@ -2188,32 +2127,25 @@ class MistConnection:
                     vpn_response = mistapi.api.v1.orgs.stats.searchOrgPeerPathStats(
                         session, org_id, site_id=site_id, mac=gw_mac, limit=100
                     )
-                    if vpn_response and hasattr(vpn_response, "data"):
-                        vpn_data = vpn_response.data
-                        vpn_results = (
-                            vpn_data.get("results", [])
-                            if isinstance(vpn_data, dict)
-                            else []
-                        )
-                        for vpn in vpn_results:
-                            vpn_peer = {
-                                "vpn_name": vpn.get("vpn_name", ""),
-                                "vpn_role": vpn.get("vpn_role", ""),
-                                "type": vpn.get("type", ""),
-                                "wan_name": vpn.get("wan_name", ""),
-                                "peer_router_name": vpn.get("peer_router_name", ""),
-                                "peer_mac": vpn.get("peer_mac", ""),
-                                "up": vpn.get("up", False),
-                                "is_active": vpn.get("is_active", False),
-                                "uptime": vpn.get("uptime", 0),
-                                "latency": vpn.get("latency", 0),
-                                "jitter": vpn.get("jitter", 0),
-                                "loss": vpn.get("loss", 0),
-                                "mos": vpn.get("mos", 0),
-                                "mtu": vpn.get("mtu", 0),
-                                "hop_count": vpn.get("hop_count", 0),
-                            }
-                            gw_info["vpn_peers"].append(vpn_peer)
+                    for vpn in self._gateway_peer_results(vpn_response):
+                        vpn_peer = {
+                            "vpn_name": vpn.get("vpn_name", ""),
+                            "vpn_role": vpn.get("vpn_role", ""),
+                            "type": vpn.get("type", ""),
+                            "wan_name": vpn.get("wan_name", ""),
+                            "peer_router_name": vpn.get("peer_router_name", ""),
+                            "peer_mac": vpn.get("peer_mac", ""),
+                            "up": vpn.get("up", False),
+                            "is_active": vpn.get("is_active", False),
+                            "uptime": vpn.get("uptime", 0),
+                            "latency": vpn.get("latency", 0),
+                            "jitter": vpn.get("jitter", 0),
+                            "loss": vpn.get("loss", 0),
+                            "mos": vpn.get("mos", 0),
+                            "mtu": vpn.get("mtu", 0),
+                            "hop_count": vpn.get("hop_count", 0),
+                        }
+                        gw_info["vpn_peers"].append(vpn_peer)
                 except Exception as e:
                     logger.debug(f"Could not fetch VPN peers for gateway {gw_mac}: {e}")
 
@@ -2224,30 +2156,23 @@ class MistConnection:
                     bgp_response = mistapi.api.v1.orgs.stats.searchOrgBgpStats(
                         session, org_id, site_id=site_id, mac=gw_mac, limit=100
                     )
-                    if bgp_response and hasattr(bgp_response, "data"):
-                        bgp_data = bgp_response.data
-                        bgp_results = (
-                            bgp_data.get("results", [])
-                            if isinstance(bgp_data, dict)
-                            else []
-                        )
-                        for bgp in bgp_results:
-                            bgp_peer = {
-                                "neighbor": bgp.get("neighbor", ""),
-                                "neighbor_mac": bgp.get("neighbor_mac", ""),
-                                "vrf_name": bgp.get("vrf_name", ""),
-                                "local_as": bgp.get("local_as", 0),
-                                "neighbor_as": bgp.get("neighbor_as", 0),
-                                "state": bgp.get("state", ""),
-                                "up": bgp.get("up", False),
-                                "uptime": bgp.get("uptime", 0),
-                                "rx_pkts": bgp.get("rx_pkts", 0),
-                                "tx_pkts": bgp.get("tx_pkts", 0),
-                                "rx_routes": bgp.get("rx_routes", 0),
-                                "tx_routes": bgp.get("tx_routes", 0),
-                                "for_overlay": bgp.get("for_overlay", False),
-                            }
-                            gw_info["bgp_peers"].append(bgp_peer)
+                    for bgp in self._gateway_peer_results(bgp_response):
+                        bgp_peer = {
+                            "neighbor": bgp.get("neighbor", ""),
+                            "neighbor_mac": bgp.get("neighbor_mac", ""),
+                            "vrf_name": bgp.get("vrf_name", ""),
+                            "local_as": bgp.get("local_as", 0),
+                            "neighbor_as": bgp.get("neighbor_as", 0),
+                            "state": bgp.get("state", ""),
+                            "up": bgp.get("up", False),
+                            "uptime": bgp.get("uptime", 0),
+                            "rx_pkts": bgp.get("rx_pkts", 0),
+                            "tx_pkts": bgp.get("tx_pkts", 0),
+                            "rx_routes": bgp.get("rx_routes", 0),
+                            "tx_routes": bgp.get("tx_routes", 0),
+                            "for_overlay": bgp.get("for_overlay", False),
+                        }
+                        gw_info["bgp_peers"].append(bgp_peer)
                 except Exception as e:
                     logger.debug(f"Could not fetch BGP peers for gateway {gw_mac}: {e}")
 
@@ -2260,6 +2185,38 @@ class MistConnection:
                 f"Error fetching gateway WAN status for site {site_id}: {error}"
             )
             raise
+
+    def _gateway_wan_ports(self, interfaces: NestedRecord) -> list[NestedRecord]:
+        ports = []
+        for name, stats in interfaces.items():
+            if isinstance(stats, dict) and (
+                stats.get("port_usage", "") == "wan" or stats.get("wan_type", "")
+            ):
+                ports.append(self._gateway_wan_port(name, stats))
+        return ports
+
+    def _gateway_wan_port(self, name: str, stats: NestedRecord) -> NestedRecord:
+        return {
+            "name": name,
+            "wan_name": stats.get("wan_name", name),
+            "status": "up" if stats.get("up", False) else "down",
+            "ip": self._first_list_item(stats.get("ips", []), ""),
+            "wan_type": stats.get("wan_type", "") or "ethernet",
+            "address_mode": stats.get("address_mode", ""),
+            "vlan": stats.get("vlan", 0),
+            "port_id": stats.get("port_id", ""),
+            "rx_bytes": stats.get("rx_bytes", 0),
+            "tx_bytes": stats.get("tx_bytes", 0),
+            "rx_pkts": stats.get("rx_pkts", 0),
+            "tx_pkts": stats.get("tx_pkts", 0),
+        }
+
+    @staticmethod
+    def _gateway_peer_results(response: Any) -> list[NestedRecord]:
+        if response and hasattr(response, "data"):
+            data = response.data
+            return data.get("results", []) if isinstance(data, dict) else []
+        return []
 
     def get_org_sle_insights(
         self, sle_type: str, duration: str = "1d", limit: int = 100
@@ -2333,26 +2290,7 @@ class MistConnection:
             )
 
             # Fetch all sites for name resolution (paginate to get all sites)
-            site_name_map = {}
-            page = 1
-            while True:
-                sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
-                    session, org_id, limit=1000, page=page
-                )
-                if sites_response and hasattr(sites_response, "data"):
-                    sites_data = sites_response.data or []
-                    if not sites_data:
-                        break  # No more sites
-                    for site in sites_data:
-                        site_id = site.get("id", "")
-                        site_name = site.get("name", "Unknown Site")
-                        site_name_map[site_id] = site_name
-                    # Check if there are more pages
-                    if len(sites_data) < 1000:
-                        break  # Last page
-                    page += 1
-                else:
-                    break
+            site_name_map = self._org_site_names(session, org_id)
 
             logger.debug(f"Built site name map with {len(site_name_map)} sites")
 
@@ -2387,26 +2325,7 @@ class MistConnection:
             }
 
             # Retry logic for intermittent 400 errors from Mist API
-            max_retries = 3
-            response = None
-            for attempt in range(max_retries):
-                response = session.mist_get(uri, query=query_params)
-                if response and response.status_code == 200:
-                    break
-                if (
-                    response
-                    and response.status_code == 400
-                    and attempt < max_retries - 1
-                ):
-                    import time
-
-                    wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
-                    logger.warning(
-                        f"API returned 400, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
-                    )
-                    time.sleep(wait_time)
-                else:
-                    break
+            response = self._get_worst_sites_response(session, uri, query_params)
 
             sites_list = []
             if response and response.status_code == 200:
@@ -2543,26 +2462,7 @@ class MistConnection:
                 sle_category = "wifi"
 
             # Fetch all sites for name resolution (paginate to get all sites)
-            site_name_map = {}
-            page = 1
-            while True:
-                sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
-                    session, org_id, limit=1000, page=page
-                )
-                if sites_response and hasattr(sites_response, "data"):
-                    sites_data = sites_response.data or []
-                    if not sites_data:
-                        break  # No more sites
-                    for site in sites_data:
-                        site_id = site.get("id", "")
-                        site_name = site.get("name", "Unknown Site")
-                        site_name_map[site_id] = site_name
-                    # Check if there are more pages
-                    if len(sites_data) < 1000:
-                        break  # Last page
-                    page += 1
-                else:
-                    break
+            site_name_map = self._org_site_names(session, org_id)
 
             logger.debug(f"Built site name map with {len(site_name_map)} sites")
 
@@ -2593,26 +2493,7 @@ class MistConnection:
             }
 
             # Retry logic for intermittent 400 errors from Mist API
-            max_retries = 3
-            response = None
-            for attempt in range(max_retries):
-                response = session.mist_get(uri, query=query_params)
-                if response and response.status_code == 200:
-                    break
-                if (
-                    response
-                    and response.status_code == 400
-                    and attempt < max_retries - 1
-                ):
-                    import time
-
-                    wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
-                    logger.warning(
-                        f"API returned 400, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
-                    )
-                    time.sleep(wait_time)
-                else:
-                    break
+            response = self._get_worst_sites_response(session, uri, query_params)
 
             sites_list = []
             if response and response.status_code == 200:
@@ -2667,6 +2548,46 @@ class MistConnection:
                 "sites": [],
                 "error": str(error),
             }
+
+    @staticmethod
+    def _org_site_names(session: mistapi.APISession, org_id: str) -> dict[str, str]:
+        names = {}
+        page = 1
+        while True:
+            response = mistapi.api.v1.orgs.sites.listOrgSites(
+                session, org_id, limit=1000, page=page
+            )
+            if not response or not hasattr(response, "data"):
+                break
+            sites = response.data or []
+            if not sites:
+                break
+            for site in sites:
+                names[site.get("id", "")] = site.get("name", "Unknown Site")
+            if len(sites) < 1000:
+                break
+            page += 1
+        return names
+
+    @staticmethod
+    def _get_worst_sites_response(
+        session: mistapi.APISession, uri: str, query: dict[str, str]
+    ) -> Any:
+        max_retries = 3
+        response = None
+        for attempt in range(max_retries):
+            response = session.mist_get(uri, query=query)
+            if response and response.status_code == 200:
+                break
+            if response and response.status_code == 400 and attempt < max_retries - 1:
+                wait_time = 2**attempt
+                logger.warning(
+                    f"API returned 400, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(wait_time)
+            else:
+                break
+        return response
 
 
 for _method_name, _method in list(MistConnection.__dict__.items()):
