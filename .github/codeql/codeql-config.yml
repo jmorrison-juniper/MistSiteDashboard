@@ -1,0 +1,3 @@
+# The CodeQL analysis reads this file. The repository holds no test fixture
+# directory, so the analysis examines each Python file.
+name: "MistSiteDashboard CodeQL Configuration"
