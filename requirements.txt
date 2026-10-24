@@ -1,6 +1,6 @@
 # MistSiteDashboard Dependencies
 # Core API and networking
-mistapi>=0.64.0,<1
+mistapi>=0.64.1,<1
 requests>=2.34.2,<3
 
 # Web framework
