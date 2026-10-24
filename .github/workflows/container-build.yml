@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -76,7 +76,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@da02d4c6a2163d1882f2ad25fce80b8ba38304d1 # v0.6.2
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-container-image.yml@e8e093d205428b5503887267b6a9751fa7354be7 # v0.6.3
     with:
       file: ./Dockerfile
       push: ${{ github.event_name != 'pull_request' }}
